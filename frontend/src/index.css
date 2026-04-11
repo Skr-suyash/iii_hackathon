@@ -1,0 +1,196 @@
+@import "tailwindcss";
+@plugin "tailwindcss-animate";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --radius: 0.625rem;
+}
+
+/* ============================================
+   NovaTrade Dark Theme
+   ============================================ */
+.dark {
+  --background: 240 15% 4%;
+  --foreground: 245 40% 95%;
+
+  --card: 240 18% 7%;
+  --card-foreground: 245 40% 95%;
+
+  --popover: 240 18% 7%;
+  --popover-foreground: 245 40% 95%;
+
+  --primary: 217 91% 60%;
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 240 20% 14%;
+  --secondary-foreground: 245 40% 95%;
+
+  --muted: 240 18% 16%;
+  --muted-foreground: 240 15% 55%;
+
+  --accent: 240 20% 14%;
+  --accent-foreground: 245 40% 95%;
+
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+
+  --border: 240 5% 18%;
+  --input: 240 5% 18%;
+  --ring: 217 91% 60%;
+
+  /* NovaTrade custom tokens */
+  --profit: 142 71% 45%;
+  --profit-foreground: 142 69% 58%;
+  --profit-muted: 142 71% 45% / 0.12;
+
+  --loss: 0 84% 60%;
+  --loss-foreground: 0 84% 71%;
+  --loss-muted: 0 84% 60% / 0.12;
+
+  --warning: 38 92% 50%;
+  --warning-foreground: 43 96% 56%;
+
+  --sidebar: 240 18% 5%;
+  --sidebar-foreground: 240 15% 55%;
+  --sidebar-border: 240 5% 18%;
+  --sidebar-accent: 217 91% 60%;
+
+  --copilot: 240 18% 5%;
+  --copilot-foreground: 245 40% 95%;
+  --copilot-bubble: 240 18% 12%;
+
+  --sidebar-width: 220px;
+  --copilot-width: 360px;
+}
+
+html {
+  color-scheme: dark;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans text-sm antialiased overflow-hidden;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  .mono {
+    font-family: "JetBrains Mono", "Fira Code", monospace;
+    font-feature-settings: "tnum" 1;
+  }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full;
+    background: hsl(240 18% 25%);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(240 15% 35%);
+  }
+}
+
+@utility text-profit {
+  color: hsl(var(--profit-foreground));
+}
+@utility text-loss {
+  color: hsl(var(--loss-foreground));
+}
+@utility bg-profit-muted {
+  background: hsl(var(--profit-muted));
+}
+@utility bg-loss-muted {
+  background: hsl(var(--loss-muted));
+}
+@utility glow-blue {
+  box-shadow: 0 0 20px hsl(var(--primary) / 0.15);
+}
+@utility glow-green {
+  box-shadow: 0 0 16px hsl(var(--profit) / 0.12);
+}
+@utility glow-red {
+  box-shadow: 0 0 16px hsl(var(--loss) / 0.12);
+}
+
+@theme inline {
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+
+  --color-sidebar: hsl(var(--sidebar));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+  --color-sidebar-border: hsl(var(--sidebar-border));
+  --color-sidebar-accent: hsl(var(--sidebar-accent));
+
+  --color-copilot: hsl(var(--copilot));
+  --color-copilot-foreground: hsl(var(--copilot-foreground));
+  --color-copilot-bubble: hsl(var(--copilot-bubble));
+
+  --color-profit: hsl(var(--profit));
+  --color-profit-foreground: hsl(var(--profit-foreground));
+  --color-loss: hsl(var(--loss));
+  --color-loss-foreground: hsl(var(--loss-foreground));
+  --color-warning: hsl(var(--warning));
+  --color-warning-foreground: hsl(var(--warning-foreground));
+
+  --font-sans: "Inter", "system-ui", "-apple-system", "sans-serif";
+  --font-mono: "JetBrains Mono", "Fira Code", "monospace";
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+
+  --animate-slide-in-right: slide-in-right 0.3s ease-out;
+  --animate-fade-up: fade-up 0.4s ease-out;
+  --animate-count-up: count-up 0.5s ease-out;
+  --animate-pulse-glow: pulse-glow 2s ease-in-out infinite;
+  --animate-bounce-dot: bounce-dot 1.4s infinite ease-in-out both;
+
+  @keyframes slide-in-right {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+  @keyframes fade-up {
+    from { transform: translateY(8px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  @keyframes count-up {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 0 0 hsl(var(--primary) / 0.4); }
+    50% { box-shadow: 0 0 12px 4px hsl(var(--primary) / 0.15); }
+  }
+  @keyframes bounce-dot {
+    0%, 80%, 100% { transform: scale(0); }
+    40% { transform: scale(1); }
+  }
+}

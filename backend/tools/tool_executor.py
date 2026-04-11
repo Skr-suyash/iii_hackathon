@@ -1,0 +1,39 @@
+"""NovaTrade — Tool executor: routes tool_calls to implementations."""
+
+from sqlalchemy.orm import Session
+from models import User
+
+
+async def execute_tool(db: Session, user: User, tool_name: str, args: dict) -> dict:
+    """Route a tool call to its implementation and return the result."""
+
+    if tool_name == "execute_trade":
+        from tools.execute_trade import run
+        return run(db, user, **args)
+
+    elif tool_name == "get_stock_info":
+        from tools.get_stock_info import run
+        return run(**args)
+
+    elif tool_name == "scan_market":
+        from tools.scan_market import run
+        return run(**args)
+
+    elif tool_name == "get_sentiment":
+        from tools.get_sentiment import run
+        return await run(**args)
+
+    elif tool_name == "analyze_portfolio":
+        from tools.analyze_portfolio import run
+        return run(db, user)
+
+    elif tool_name == "set_price_alert":
+        from tools.set_price_alert import run
+        return run(db, user, **args)
+
+    elif tool_name == "create_conditional_order":
+        from tools.create_conditional_order import run
+        return run(db, user, **args)
+
+    else:
+        return {"error": f"Unknown tool: {tool_name}"}
