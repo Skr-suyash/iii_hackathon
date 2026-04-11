@@ -1,5 +1,4 @@
 import { useEffect, useRef } from "react";
-import { Card } from "@/components/ui/card";
 
 export default function TradingChart({ symbol }) {
   const containerRef = useRef(null);
@@ -26,7 +25,7 @@ export default function TradingChart({ symbol }) {
           toolbar_bg: "#0a0a10",
           enable_publishing: false,
           allow_symbol_change: false,
-          hide_top_toolbar: false,
+          hide_top_toolbar: true,
           hide_legend: false,
           save_image: false,
           container_id: "tv-chart-container",
@@ -50,12 +49,10 @@ export default function TradingChart({ symbol }) {
   }, [symbol]);
 
   return (
-    <Card className="overflow-hidden">
-      <div
-        id="tv-chart-container"
-        ref={containerRef}
-        className="h-[500px] w-full"
-      />
-    </Card>
+    <div
+      id="tv-chart-container"
+      ref={containerRef}
+      className="h-full w-full"
+    />
   );
 }

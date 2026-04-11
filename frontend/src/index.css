@@ -4,7 +4,7 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --radius: 0.625rem;
+  --radius: 0.25rem;
 }
 
 /* ============================================
@@ -60,8 +60,9 @@
   --copilot-foreground: 245 40% 95%;
   --copilot-bubble: 240 18% 12%;
 
-  --sidebar-width: 220px;
-  --copilot-width: 360px;
+  --sidebar-width: 56px;
+  --copilot-width: 340px;
+  --right-panel-width: 320px;
 }
 
 html {

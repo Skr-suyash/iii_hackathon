@@ -1,72 +1,112 @@
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, TrendingUp, Eye, History, LogOut, Zap } from "lucide-react";
+import {
+  LayoutDashboard,
+  TrendingUp,
+  Briefcase,
+  Eye,
+  History,
+  LogOut,
+  Zap,
+  Sparkles,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
-import { Separator } from "@/components/ui/separator";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
   { icon: TrendingUp, label: "Trade", path: "/trade" },
+  { icon: Briefcase, label: "Holdings", path: "/holdings" },
   { icon: Eye, label: "Watchlist", path: "/watchlist" },
   { icon: History, label: "History", path: "/history" },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ copilotOpen, onToggleCopilot }) {
   const { user, logout } = useAuth();
 
   return (
-    <div className="flex flex-col h-full w-[var(--sidebar-width)] bg-sidebar border-r border-sidebar-border shrink-0">
+    <div className="flex flex-col h-full w-14 bg-sidebar border-r border-sidebar-border shrink-0">
       {/* Logo */}
-      <div className="flex items-center gap-2.5 px-5 py-5">
-        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10">
-          <Zap className="h-4.5 w-4.5 text-primary" />
+      <div className="flex items-center justify-center h-14 shrink-0">
+        <div className="flex items-center justify-center w-9 h-9 rounded-md bg-primary/10">
+          <Zap className="h-4 w-4 text-primary" />
         </div>
-        <span className="text-lg font-bold tracking-tight text-foreground">
-          NovaTrade
-        </span>
       </div>
 
-      <Separator className="bg-sidebar-border" />
-
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 space-y-1">
+      <nav className="flex-1 flex flex-col items-center gap-0.5 pt-2">
         {navItems.map((item) => (
-          <NavLink
-            key={item.path}
-            to={item.path}
-            className={({ isActive }) =>
-              cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors duration-150",
-                isActive
-                  ? "bg-primary/10 text-primary border-l-2 border-primary ml-0"
-                  : "text-sidebar-foreground hover:text-foreground hover:bg-muted"
-              )
-            }
-          >
-            <item.icon className="h-5 w-5 shrink-0" />
-            <span>{item.label}</span>
-          </NavLink>
+          <Tooltip key={item.path} delayDuration={100}>
+            <TooltipTrigger asChild>
+              <NavLink
+                to={item.path}
+                className={({ isActive }) =>
+                  cn(
+                    "flex items-center justify-center w-10 h-10 rounded-sm transition-colors duration-150",
+                    isActive
+                      ? "bg-primary/15 text-primary"
+                      : "text-sidebar-foreground hover:text-foreground hover:bg-muted"
+                  )
+                }
+              >
+                <item.icon className="h-[18px] w-[18px]" />
+              </NavLink>
+            </TooltipTrigger>
+            <TooltipContent side="right" className="text-xs">
+              {item.label}
+            </TooltipContent>
+          </Tooltip>
         ))}
       </nav>
 
-      {/* User section */}
-      <div className="px-3 py-4 border-t border-sidebar-border">
-        <div className="flex items-center gap-3 px-3 py-2">
-          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary text-xs font-bold">
-            {user?.username?.charAt(0).toUpperCase() || "U"}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-foreground truncate">{user?.username || "User"}</p>
-            <p className="text-xs text-muted-foreground truncate">{user?.email || ""}</p>
-          </div>
-          <button
-            onClick={logout}
-            className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
-            title="Logout"
-          >
-            <LogOut className="h-4 w-4" />
-          </button>
-        </div>
+      {/* Bottom actions */}
+      <div className="flex flex-col items-center gap-0.5 pb-3">
+        {/* Copilot toggle */}
+        <Tooltip delayDuration={100}>
+          <TooltipTrigger asChild>
+            <button
+              onClick={onToggleCopilot}
+              className={cn(
+                "flex items-center justify-center w-10 h-10 rounded-sm transition-colors duration-150 cursor-pointer",
+                copilotOpen
+                  ? "bg-primary/15 text-primary"
+                  : "text-sidebar-foreground hover:text-foreground hover:bg-muted"
+              )}
+            >
+              <Sparkles className="h-[18px] w-[18px]" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right" className="text-xs">
+            {copilotOpen ? "Hide AI Copilot" : "Show AI Copilot"}
+          </TooltipContent>
+        </Tooltip>
+
+        {/* User avatar */}
+        <Tooltip delayDuration={100}>
+          <TooltipTrigger asChild>
+            <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10 text-primary text-xs font-bold cursor-default">
+              {user?.username?.charAt(0).toUpperCase() || "U"}
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side="right" className="text-xs">
+            {user?.username || "User"}
+          </TooltipContent>
+        </Tooltip>
+
+        {/* Logout */}
+        <Tooltip delayDuration={100}>
+          <TooltipTrigger asChild>
+            <button
+              onClick={logout}
+              className="flex items-center justify-center w-10 h-10 rounded-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+            >
+              <LogOut className="h-[18px] w-[18px]" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right" className="text-xs">
+            Logout
+          </TooltipContent>
+        </Tooltip>
       </div>
     </div>
   );

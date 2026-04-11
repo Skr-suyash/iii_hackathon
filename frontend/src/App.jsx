@@ -5,6 +5,7 @@ import AppShell from "@/components/layout/AppShell";
 import LoginPage from "@/pages/LoginPage";
 import DashboardPage from "@/pages/DashboardPage";
 import TradePage from "@/pages/TradePage";
+import HoldingsPage from "@/pages/HoldingsPage";
 import WatchlistPage from "@/pages/WatchlistPage";
 import HistoryPage from "@/pages/HistoryPage";
 
@@ -28,6 +29,7 @@ function AppRoutes() {
       >
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/trade" element={<TradePage />} />
+        <Route path="/holdings" element={<HoldingsPage />} />
         <Route path="/watchlist" element={<WatchlistPage />} />
         <Route path="/history" element={<HistoryPage />} />
       </Route>
