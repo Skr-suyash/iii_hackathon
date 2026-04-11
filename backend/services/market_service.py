@@ -98,6 +98,45 @@ def fetch_stock_data(symbol: str) -> dict:
         return {"error": f"Failed to fetch data for {symbol}: {str(e)}"}
 
 
+def fetch_chart_data(symbol: str, period: str = "6mo", interval: str = "auto") -> list[dict]:
+    """Fetch OHLCV data formatted for KlineChart (timestamps in milliseconds)."""
+    info = STOCK_UNIVERSE.get(symbol)
+    if not info:
+        return []
+        
+    if interval == "auto":
+        # Smallest optimal intervals according to Yahoo Finance restrictions
+        if period in ["1d", "5d"]:
+            interval = "1m"
+        elif period == "1mo":
+            interval = "2m"
+        elif period in ["3mo", "6mo", "1y"]:
+            interval = "1h"
+        else:
+            interval = "1d"
+
+    try:
+        ticker = yf.Ticker(symbol)
+        hist = ticker.history(period=period, interval=interval)
+        if hist.empty:
+            return []
+            
+        data = []
+        for date, row in hist.iterrows():
+            data.append({
+                "timestamp": int(date.timestamp() * 1000),
+                "open": round(float(row["Open"]), 2),
+                "high": round(float(row["High"]), 2),
+                "low": round(float(row["Low"]), 2),
+                "close": round(float(row["Close"]), 2),
+                "volume": int(row["Volume"]),
+            })
+        return data
+    except Exception as e:
+        print(f"Chart data error for {symbol}: {e}")
+        return []
+
+
 def fetch_all_prices() -> list[dict]:
     """Fetch summary prices for all stocks in the universe."""
     results = []

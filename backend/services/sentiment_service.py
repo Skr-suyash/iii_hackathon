@@ -5,16 +5,33 @@ from config import OLLAMA_URL, OLLAMA_MODEL, OLLAMA_TIMEOUT, STOCK_UNIVERSE
 
 
 async def get_sentiment(symbol: str) -> dict:
-    """Get AI-analyzed sentiment for a stock. Uses Gemma 4 via Ollama."""
+    """Get AI-analyzed sentiment for a stock. Uses Gemma 4 via Ollama and yfinance news."""
     info = STOCK_UNIVERSE.get(symbol)
     if not info:
         return {"sentiment": "neutral", "confidence": 0, "summary": "Unknown stock"}
 
+    news_text = ""
+    try:
+        import yfinance as yf
+        ticker = yf.Ticker(symbol)
+        news_items = ticker.news
+        if news_items:
+            for item in news_items[:8]:
+                title = item.get("title", "")
+                publisher = item.get("publisher", "")
+                news_text += f"- [{publisher}] {title}\n"
+    except Exception as e:
+        print(f"Error fetching news for {symbol}: {e}")
+
     prompt = f"""Analyze the current market sentiment for {info['name']} ({symbol}) in the {info['sector']} sector.
-Based on your knowledge, provide:
+
+Recent News:
+{news_text if news_text else "No recent news available."}
+
+Based on your knowledge and the news provided above, provide:
 1. Overall sentiment: bullish, bearish, or neutral
 2. Confidence: high, medium, or low
-3. Brief 1-sentence summary
+3. Brief 1-sentence summary summarizing the sentiment and news.
 
 Respond in this exact JSON format only:
 {{"sentiment": "bullish|bearish|neutral", "confidence": "high|medium|low", "summary": "..."}}"""
