@@ -21,65 +21,80 @@ const navItems = [
   { icon: History, label: "History", path: "/history" },
 ];
 
+function SidebarIcon({ children, tooltip, onClick, active, asChild }) {
+  return (
+    <Tooltip delayDuration={100}>
+      <TooltipTrigger asChild>
+        {asChild ? children : (
+          <button
+            onClick={onClick}
+            className={cn(
+              "flex items-center justify-center w-10 h-10 rounded-sm transition-colors duration-150 cursor-pointer",
+              active
+                ? "bg-primary/15 text-primary"
+                : "text-sidebar-foreground hover:text-foreground hover:bg-muted"
+            )}
+          >
+            {children}
+          </button>
+        )}
+      </TooltipTrigger>
+      <TooltipContent side="right" className="text-xs">
+        {tooltip}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 export default function Sidebar({ copilotOpen, onToggleCopilot }) {
   const { user, logout } = useAuth();
 
   return (
-    <div className="flex flex-col h-full w-14 bg-sidebar border-r border-sidebar-border shrink-0">
-      {/* Logo */}
-      <div className="flex items-center justify-center h-14 shrink-0">
-        <div className="flex items-center justify-center w-9 h-9 rounded-md bg-primary/10">
-          <Zap className="h-4 w-4 text-primary" />
+    <div className="flex flex-col items-center h-full w-14 bg-sidebar border-r border-sidebar-border shrink-0">
+      {/* Logo - same w-10 h-10 sizing as nav icons for alignment */}
+      <div className="flex items-center justify-center w-14 h-12 shrink-0">
+        <div className="flex items-center justify-center w-10 h-10 rounded-sm bg-primary/10">
+          <Zap className="h-[18px] w-[18px] text-primary" />
         </div>
       </div>
 
+      {/* Separator */}
+      <div className="w-8 h-px bg-border mb-2" />
+
       {/* Navigation */}
-      <nav className="flex-1 flex flex-col items-center gap-0.5 pt-2">
+      <nav className="flex-1 flex flex-col items-center ml-[20px] gap-0.5">
         {navItems.map((item) => (
-          <Tooltip key={item.path} delayDuration={100}>
-            <TooltipTrigger asChild>
-              <NavLink
-                to={item.path}
-                className={({ isActive }) =>
-                  cn(
-                    "flex items-center justify-center w-10 h-10 rounded-sm transition-colors duration-150",
-                    isActive
-                      ? "bg-primary/15 text-primary"
-                      : "text-sidebar-foreground hover:text-foreground hover:bg-muted"
-                  )
-                }
-              >
-                <item.icon className="h-[18px] w-[18px]" />
-              </NavLink>
-            </TooltipTrigger>
-            <TooltipContent side="right" className="text-xs">
-              {item.label}
-            </TooltipContent>
-          </Tooltip>
+          <SidebarIcon key={item.path} tooltip={item.label} asChild>
+            <NavLink
+              to={item.path}
+              className={({ isActive }) =>
+                cn(
+                  "flex items-center justify-center w-10 h-10 rounded-sm transition-colors duration-150",
+                  isActive
+                    ? "bg-primary/15 text-primary"
+                    : "text-sidebar-foreground hover:text-foreground hover:bg-muted"
+                )
+              }
+            >
+              <item.icon className="h-[18px] w-[18px]" />
+            </NavLink>
+          </SidebarIcon>
         ))}
       </nav>
 
       {/* Bottom actions */}
       <div className="flex flex-col items-center gap-0.5 pb-3">
         {/* Copilot toggle */}
-        <Tooltip delayDuration={100}>
-          <TooltipTrigger asChild>
-            <button
-              onClick={onToggleCopilot}
-              className={cn(
-                "flex items-center justify-center w-10 h-10 rounded-sm transition-colors duration-150 cursor-pointer",
-                copilotOpen
-                  ? "bg-primary/15 text-primary"
-                  : "text-sidebar-foreground hover:text-foreground hover:bg-muted"
-              )}
-            >
-              <Sparkles className="h-[18px] w-[18px]" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="right" className="text-xs">
-            {copilotOpen ? "Hide AI Copilot" : "Show AI Copilot"}
-          </TooltipContent>
-        </Tooltip>
+        <SidebarIcon
+          tooltip={copilotOpen ? "Hide AI Copilot" : "Show AI Copilot"}
+          onClick={onToggleCopilot}
+          active={copilotOpen}
+        >
+          <Sparkles className="h-[18px] w-[18px]" />
+        </SidebarIcon>
+
+        {/* Separator */}
+        <div className="w-8 h-px bg-border my-1" />
 
         {/* User avatar */}
         <Tooltip delayDuration={100}>
@@ -94,19 +109,9 @@ export default function Sidebar({ copilotOpen, onToggleCopilot }) {
         </Tooltip>
 
         {/* Logout */}
-        <Tooltip delayDuration={100}>
-          <TooltipTrigger asChild>
-            <button
-              onClick={logout}
-              className="flex items-center justify-center w-10 h-10 rounded-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
-            >
-              <LogOut className="h-[18px] w-[18px]" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="right" className="text-xs">
-            Logout
-          </TooltipContent>
-        </Tooltip>
+        <SidebarIcon tooltip="Logout" onClick={logout}>
+          <LogOut className="h-[18px] w-[18px]" />
+        </SidebarIcon>
       </div>
     </div>
   );

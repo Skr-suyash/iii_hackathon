@@ -5,6 +5,41 @@ import { useMarketData } from "@/hooks/useMarketData";
 
 const TIMEFRAMES = ["1D", "5D", "1M", "3M", "6M", "YTD", "1Y", "5Y", "All"];
 
+const INDICATOR_GROUPS = [
+  {
+    name: "Volume",
+    items: [
+      { id: "EaseOfMovement@tv-basicstudies", label: "Ease of Movement (EOM)" },
+      { id: "ChaikinMoneyFlow@tv-basicstudies", label: "Chaikin Money Flow (CMF)" },
+      { id: "OnBalanceVolume@tv-basicstudies", label: "On Balance Volume (OBV)" },
+    ],
+  },
+  {
+    name: "Trend",
+    items: [
+      { id: "MACD@tv-basicstudies", label: "MACD" },
+      { id: "DirectionalMovement@tv-basicstudies", label: "Directional Movement (ADX)" },
+      { id: "MASimple@tv-basicstudies", label: "Moving Average (MA)" },
+    ],
+  },
+  {
+    name: "Volatility",
+    items: [
+      { id: "BB@tv-basicstudies", label: "Bollinger Bands" },
+      { id: "ATR@tv-basicstudies", label: "Average True Range (ATR)" },
+    ],
+  },
+  {
+    name: "Momentum",
+    items: [
+      { id: "RSI@tv-basicstudies", label: "Relative Strength Index (RSI)" },
+      { id: "Stochastic@tv-basicstudies", label: "Stochastic Oscillator" },
+      { id: "CCI@tv-basicstudies", label: "Commodity Channel Index (CCI)" },
+      { id: "ChandeMO@tv-basicstudies", label: "Chande Momentum (CMO)" },
+    ],
+  },
+];
+
 export default function TopToolbar({
   symbol,
   onSymbolChange,
@@ -12,11 +47,15 @@ export default function TopToolbar({
   onToggleBottomPanel,
   rightPanelOpen,
   onToggleRightPanel,
+  activeTimeframe = "1D",
+  onTimeframeChange,
+  activeIndicators = [],
+  onToggleIndicator,
 }) {
   const { stocks } = useMarketData();
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
-  const [activeTimeframe, setActiveTimeframe] = useState("1D");
+  const [indicatorsOpen, setIndicatorsOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   const filtered = stocks.filter(
@@ -117,7 +156,7 @@ export default function TopToolbar({
         {TIMEFRAMES.map((tf) => (
           <button
             key={tf}
-            onClick={() => setActiveTimeframe(tf)}
+            onClick={() => onTimeframeChange?.(tf)}
             className={cn(
               "px-2 py-1 text-xs rounded-sm transition-colors cursor-pointer leading-none",
               activeTimeframe === tf
@@ -131,11 +170,56 @@ export default function TopToolbar({
       </div>
 
       {/* Right-side toolbar items */}
-      <div className="ml-auto flex items-center gap-0.5 shrink-0">
-        <button className="flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-muted rounded-sm transition-colors cursor-pointer">
+      <div className="ml-auto flex items-center gap-0.5 shrink-0 relative">
+        <button
+          onClick={() => setIndicatorsOpen(!indicatorsOpen)}
+          className={cn(
+            "flex items-center gap-1 px-2 py-1 text-xs rounded-sm transition-colors cursor-pointer",
+            indicatorsOpen ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground hover:bg-muted"
+          )}
+        >
           <BarChart3 className="h-3.5 w-3.5" />
           <span className="hidden lg:inline">Indicators</span>
+          {activeIndicators.length > 0 && (
+            <span className="ml-1 bg-primary text-primary-foreground rounded-full w-4 h-4 flex items-center justify-center text-[10px] font-bold">
+              {activeIndicators.length}
+            </span>
+          )}
         </button>
+
+        {indicatorsOpen && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setIndicatorsOpen(false)} />
+            <div className="absolute z-50 top-full right-0 mt-2 w-64 bg-popover border border-border rounded-sm shadow-xl max-h-96 overflow-y-auto">
+              {INDICATOR_GROUPS.map((group) => (
+                <div key={group.name} className="py-2 border-b border-border last:border-0">
+                  <div className="px-3 mb-1">
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                      {group.name}
+                    </span>
+                  </div>
+                  {group.items.map((ind) => {
+                    const isActive = activeIndicators.includes(ind.id);
+                    return (
+                      <button
+                        key={ind.id}
+                        onClick={() => onToggleIndicator?.(ind.id)}
+                        className={cn(
+                          "w-full text-left px-4 py-1.5 text-xs transition-colors cursor-pointer flex items-center justify-between",
+                          isActive ? "bg-primary/10 text-primary font-medium" : "text-foreground hover:bg-muted"
+                        )}
+                      >
+                        {ind.label}
+                        {isActive && <span className="w-1.5 h-1.5 rounded-full bg-primary" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
         <button className="flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-muted rounded-sm transition-colors cursor-pointer">
           <Clock className="h-3.5 w-3.5" />
           <span className="hidden lg:inline">Alert</span>

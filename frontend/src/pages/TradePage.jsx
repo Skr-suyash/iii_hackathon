@@ -13,6 +13,8 @@ import { cn } from "@/lib/utils";
 
 export default function TradePage() {
   const [symbol, setSymbol] = useState("AAPL");
+  const [timeframe, setTimeframe] = useState("1D");
+  const [activeIndicators, setActiveIndicators] = useState(["MACD@tv-basicstudies"]);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [bottomPanelOpen, setBottomPanelOpen] = useState(true);
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
@@ -33,6 +35,12 @@ export default function TradePage() {
         onToggleBottomPanel={() => setBottomPanelOpen((v) => !v)}
         rightPanelOpen={rightPanelOpen}
         onToggleRightPanel={() => setRightPanelOpen((v) => !v)}
+        activeTimeframe={timeframe}
+        onTimeframeChange={setTimeframe}
+        activeIndicators={activeIndicators}
+        onToggleIndicator={(ind) => setActiveIndicators((prev) => 
+          prev.includes(ind) ? prev.filter((i) => i !== ind) : [...prev, ind]
+        )}
       />
 
       {/* Main content area */}
@@ -41,7 +49,7 @@ export default function TradePage() {
         <div className="flex-1 flex flex-col min-w-0">
           {/* Chart area */}
           <div className="flex-1 min-h-0 relative">
-            <TradingChart symbol={symbol} />
+            <TradingChart symbol={symbol} timeframe={timeframe} activeIndicators={activeIndicators} />
           </div>
 
           {/* Bottom panel (togglable) */}
@@ -76,7 +84,7 @@ export default function TradePage() {
                     </TabsTrigger>
                   </TabsList>
 
-                  {/* Stat summary in tab bar */}
+                  {/* Stat summary */}
                   {!loading && portfolio && (
                     <div className="ml-auto flex items-center gap-4 text-xs pr-2">
                       <div>
@@ -119,7 +127,7 @@ export default function TradePage() {
                   </div>
                 </TabsContent>
 
-                <TabsContent value="allocation" className="flex-1 overflow-auto m-0">
+                <TabsContent value="allocation" className="flex-1 overflow-auto m-0 p-3">
                   <AllocationPie sectors={portfolio?.sector_breakdown || []} />
                 </TabsContent>
               </Tabs>
