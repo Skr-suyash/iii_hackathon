@@ -4,6 +4,8 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from typing import Optional
 from sqlalchemy.orm import Session
+from fastapi.responses import StreamingResponse
+import json
 
 from database import get_db
 from models import User, Holding
@@ -12,6 +14,8 @@ from services.optimization_service import optimize_portfolio, generate_efficient
 from services.risk_scoring_service import analyze_portfolio_risk
 from services.market_service import fetch_stock_data
 from services.trade_service import execute_trade
+from groq import AsyncGroq
+from config import GROQ_API_KEY, GROQ_MODEL, GROQ_TEMPERATURE
 
 router = APIRouter(prefix="/api", tags=["optimization"])
 
@@ -196,3 +200,56 @@ def get_clusters(
     """Return the cluster model only (for visualization)."""
     from services.risk_scoring_service import _cluster_universe
     return _cluster_universe()
+
+
+# ---------------------------------------------------------------------------
+# AI Advisor Stream
+# ---------------------------------------------------------------------------
+class AdvisorRequest(BaseModel):
+    objective: str
+    tickers: list[str]
+    opt_result: dict
+    risk_data: dict
+
+@router.post("/optimize/advisor")
+async def get_optimization_advisor_stream(
+    req: AdvisorRequest,
+    user: User = Depends(get_current_user)
+):
+    """Stream a live assessment of the selected optimization strategy from Groq."""
+    
+    prompt = f"""You are NovaTrade AI, an elite quantitative portfolio analyst.
+The user just generated a new portfolio optimization.
+Objective Chosen: {req.objective.upper()}
+Tickers: {', '.join(req.tickers)}
+
+Optimization Results:
+{json.dumps(req.opt_result, indent=2)}
+
+Risk Analysis ML Data (Clusters & Diversification):
+{json.dumps(req.risk_data, indent=2)}
+
+Analyze this specific optimization result. 
+- Is this a good mix? 
+- Did the selected objective heavily concentrate the portfolio or balance it across clusters?
+- Keep it concise, professional, and actionable (max 3 short paragraphs).
+Format with bolding where appropriate. DO NOT USE MARKDOWN HEADINGS (e.g. # or ##).
+"""
+
+    async def generate():
+        try:
+            client = AsyncGroq(api_key=GROQ_API_KEY)
+            stream = await client.chat.completions.create(
+                model=GROQ_MODEL,
+                messages=[{"role": "system", "content": prompt}],
+                temperature=GROQ_TEMPERATURE,
+                stream=True
+            )
+            async for chunk in stream:
+                content = chunk.choices[0].delta.content
+                if content:
+                    yield f"data: {json.dumps({'content': content})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+            
+    return StreamingResponse(generate(), media_type="text/event-stream")

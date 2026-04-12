@@ -1,4 +1,4 @@
-"""NovaTrade — AI Copilot service with Ollama integration."""
+"""NovaTrade — AI Copilot service with Groq integration."""
 
 import json
 import logging
@@ -6,9 +6,10 @@ import httpx
 
 from sqlalchemy.orm import Session
 from models import User, Holding, PendingOrder
+from groq import AsyncGroq
 from config import (
-    OLLAMA_URL, OLLAMA_MODEL, OLLAMA_TEMPERATURE, OLLAMA_NUM_CTX,
-    OLLAMA_TIMEOUT, MAX_TOOL_CALLS_PER_TURN, CONVERSATION_MEMORY_SIZE,
+    GROQ_API_KEY, GROQ_MODEL, GROQ_TEMPERATURE,
+    MAX_TOOL_CALLS_PER_TURN, CONVERSATION_MEMORY_SIZE,
     SYSTEM_PROMPT, INTENT_FALLBACK_PROMPT, STOCK_UNIVERSE,
 )
 from tools.tool_schemas import TOOLS
@@ -23,7 +24,7 @@ async def chat_stream(
     message: str,
     conversation: list[dict],
 ):
-    """Process a copilot chat message and stream the response."""
+    """Process a copilot chat message and stream the response using Groq."""
 
     # Build dynamic system prompt with user context
     system_prompt = _build_system_prompt(db, user)
@@ -44,9 +45,16 @@ async def chat_stream(
         attempts += 1
 
         try:
-            result = await _call_ollama(messages)
+            client = AsyncGroq(api_key=GROQ_API_KEY)
+            response = await client.chat.completions.create(
+                model=GROQ_MODEL,
+                messages=messages,
+                temperature=GROQ_TEMPERATURE,
+                tools=TOOLS,
+                tool_choice="auto"
+            )
         except Exception as e:
-            logger.error("Ollama call failed: %s", e)
+            logger.error("Groq call failed: %s", e)
             # Try fallback intent parsing natively
             fallback_res = await _fallback_response(db, user, message, tool_calls_made)
             for tc in fallback_res.get("tool_calls_made", []):
@@ -54,19 +62,23 @@ async def chat_stream(
             yield f"data: {json.dumps({'type': 'chunk', 'content': fallback_res['response']})}\n\n"
             return
 
-        msg = result.get("message", {})
-        tool_calls = msg.get("tool_calls", [])
-
-        if not tool_calls:
+        msg = response.choices[0].message
+        
+        if not msg.tool_calls:
             # No tool calls — return the text response
-            yield f"data: {json.dumps({'type': 'chunk', 'content': msg.get('content', 'I am not sure how to help with that.')})}\n\n"
+            yield f"data: {json.dumps({'type': 'chunk', 'content': msg.content or 'I am not sure how to help with that.'})}\n\n"
             return
 
+        # Explicitly remove None values to keep the conversation array clean for Groq
+        messages.append(msg.model_dump(exclude_none=True))
+
         # Execute each tool call
-        for tc in tool_calls:
-            func = tc.get("function", {})
-            tool_name = func.get("name", "")
-            tool_args = func.get("arguments", {})
+        for tc in msg.tool_calls:
+            tool_name = tc.function.name
+            try:
+                tool_args = json.loads(tc.function.arguments)
+            except Exception:
+                tool_args = {}
 
             logger.info("Tool call: %s(%s)", tool_name, json.dumps(tool_args))
 
@@ -80,10 +92,11 @@ async def chat_stream(
                 "result": tool_result,
             })
 
-            # Append assistant message with tool call + tool result
-            messages.append(msg)
+            # Append tool result matching the tool_call_id
             messages.append({
                 "role": "tool",
+                "tool_call_id": tc.id,
+                "name": tool_name,
                 "content": json.dumps(tool_result),
             })
 
@@ -94,61 +107,19 @@ async def chat_stream(
     })
 
     try:
-        async for chunk in _call_ollama_stream(messages, include_tools=False):
-            yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
+        stream = await client.chat.completions.create(
+            model=GROQ_MODEL,
+            messages=messages,
+            temperature=GROQ_TEMPERATURE,
+            stream=True
+        )
+        async for chunk in stream:
+            content = chunk.choices[0].delta.content
+            if content:
+                yield f"data: {json.dumps({'type': 'chunk', 'content': content})}\n\n"
     except Exception as e:
-        logger.error("Ollama streaming failed: %s", e)
+        logger.error("Groq streaming failed: %s", e)
         yield f"data: {json.dumps({'type': 'chunk', 'content': ' I had trouble formatting the response. Please try again.'})}\n\n"
-
-
-async def _call_ollama(messages: list[dict], include_tools: bool = True) -> dict:
-    """Call Ollama's /api/chat endpoint."""
-    payload = {
-        "model": OLLAMA_MODEL,
-        "messages": messages,
-        "stream": False,
-        "keep_alive": -1,
-        "options": {
-            "temperature": OLLAMA_TEMPERATURE,
-            "num_ctx": OLLAMA_NUM_CTX,
-        },
-    }
-    if include_tools:
-        payload["tools"] = TOOLS
-
-    async with httpx.AsyncClient(timeout=OLLAMA_TIMEOUT) as client:
-        response = await client.post(OLLAMA_URL, json=payload)
-        response.raise_for_status()
-        return response.json()
-
-
-async def _call_ollama_stream(messages: list[dict], include_tools: bool = False):
-    """Call Ollama's /api/chat endpoint and yield SSE stream chunks."""
-    payload = {
-        "model": OLLAMA_MODEL,
-        "messages": messages,
-        "stream": True,
-        "keep_alive": -1,
-        "options": {
-            "temperature": OLLAMA_TEMPERATURE,
-            "num_ctx": OLLAMA_NUM_CTX,
-        },
-    }
-    if include_tools:
-        payload["tools"] = TOOLS
-
-    async with httpx.AsyncClient(timeout=OLLAMA_TIMEOUT) as client:
-        async with client.stream("POST", OLLAMA_URL, json=payload) as response:
-            response.raise_for_status()
-            async for line in response.aiter_lines():
-                if line:
-                    try:
-                        data = json.loads(line)
-                        chunk = data.get("message", {}).get("content", "")
-                        if chunk:
-                            yield chunk
-                    except json.JSONDecodeError:
-                        continue
 
 
 async def _fallback_response(
@@ -157,46 +128,41 @@ async def _fallback_response(
     """Fallback: use intent parsing if native function calling fails."""
     try:
         prompt = INTENT_FALLBACK_PROMPT.format(user_message=message)
-        async with httpx.AsyncClient(timeout=OLLAMA_TIMEOUT) as client:
-            response = await client.post(
-                OLLAMA_URL,
-                json={
-                    "model": OLLAMA_MODEL,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "stream": False,
-                    "keep_alive": -1,
-                    "options": {"temperature": 0, "num_ctx": 2048},
-                },
-            )
-            response.raise_for_status()
-            content = response.json().get("message", {}).get("content", "")
+        client = AsyncGroq(api_key=GROQ_API_KEY)
+        response = await client.chat.completions.create(
+            model=GROQ_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0,
+            response_format={"type": "json_object"}
+        )
+        content = response.choices[0].message.content or ""
 
-            # Parse intents from JSON
-            start = content.find("{")
-            end = content.rfind("}") + 1
-            if start != -1 and end > start:
-                parsed = json.loads(content[start:end])
-                intents = parsed.get("intents", [])
+        # Parse intents from JSON
+        start = content.find("{")
+        end = content.rfind("}") + 1
+        if start != -1 and end > start:
+            parsed = json.loads(content[start:end])
+            intents = parsed.get("intents", [])
 
-                results = []
-                for intent in intents:
-                    name = intent.get("name", "unknown")
-                    params = intent.get("params", {})
-                    if name != "unknown":
-                        result = await execute_tool(db, user, name, params)
-                        existing_calls.append({"tool": name, "args": params, "result": result})
-                        results.append(f"**{name}**: {json.dumps(result)}")
+            results = []
+            for intent in intents:
+                name = intent.get("name", "unknown")
+                params = intent.get("params", {})
+                if name != "unknown":
+                    result = await execute_tool(db, user, name, params)
+                    existing_calls.append({"tool": name, "args": params, "result": result})
+                    results.append(f"**{name}**: {json.dumps(result)}")
 
-                if results:
-                    return {
-                        "response": "Here's what I found:\n" + "\n".join(results),
-                        "tool_calls_made": existing_calls,
-                    }
+            if results:
+                return {
+                    "response": "Here's what I found:\n" + "\n".join(results),
+                    "tool_calls_made": existing_calls,
+                }
     except Exception as e:
         logger.error("Fallback parsing failed: %s", e)
 
     return {
-        "response": "I'm having trouble connecting to the AI model. Please make sure Ollama is running with `ollama run gemma4`.",
+        "response": "I'm having trouble connecting to the AI model. Please check your GROQ_API_KEY.",
         "tool_calls_made": existing_calls,
     }
 

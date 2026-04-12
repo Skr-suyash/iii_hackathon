@@ -1,11 +1,13 @@
 """NovaTrade — Configuration constants."""
 
-# ---------- Ollama / AI ----------
-OLLAMA_URL = "http://localhost:11434/api/chat"
-OLLAMA_MODEL = "gemma4:e2b"
-OLLAMA_TEMPERATURE = 0
-OLLAMA_NUM_CTX = 8192
-OLLAMA_TIMEOUT = 120.0
+# ---------- Groq / AI ----------
+import os
+from dotenv import load_dotenv
+load_dotenv()
+
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "YOUR_GROQ_KEY_HERE")
+GROQ_MODEL = "llama-3.3-70b-versatile"
+GROQ_TEMPERATURE = 0
 MAX_TOOL_CALLS_PER_TURN = 3
 CONVERSATION_MEMORY_SIZE = 10
 

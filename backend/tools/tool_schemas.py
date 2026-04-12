@@ -41,7 +41,7 @@ TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "max_price": {"type": "number", "description": "Maximum stock price filter"},
+                    "max_price": {"type": "string", "description": "Maximum stock price filter (e.g. '100')"},
                     "sector": {"type": "string", "description": "Sector filter, e.g. Technology, Healthcare, Finance"},
                     "condition": {"type": "string", "enum": ["oversold", "overbought", "bullish_sentiment", "bearish_sentiment"], "description": "Technical or sentiment condition filter"},
                 },
@@ -191,8 +191,8 @@ TOOLS = [
                     },
                     "objective": {
                         "type": "string",
-                        "enum": ["max_sharpe", "min_volatility", "efficient_return"],
-                        "description": "max_sharpe = best risk-adjusted return, min_volatility = lowest risk, efficient_return = target a specific return.",
+                        "enum": ["max_sharpe", "min_volatility", "efficient_return", "hrp"],
+                        "description": "max_sharpe = best risk-adjusted return, min_volatility = lowest risk, efficient_return = target a specific return, hrp = machine learning hierarchical risk parity.",
                     },
                     "target_return": {
                         "type": "number",

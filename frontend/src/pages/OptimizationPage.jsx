@@ -58,8 +58,9 @@ function TickerSelector({ selected, onChange }) {
 function ObjectiveSelector({ objective, onChange, targetReturn, onTargetChange }) {
   const options = [
     { value: "max_sharpe", label: "Max Sharpe", desc: "Best risk-adjusted return" },
-    { value: "min_volatility", label: "Min Volatility", desc: "Lowest risk portfolio" },
+    { value: "min_volatility", label: "Min Vol", desc: "Lowest risk portfolio" },
     { value: "efficient_return", label: "Target Return", desc: "Specify annual return" },
+    { value: "hrp", label: "HRP (ML Cluster)", desc: "Hierarchical Risk Parity" },
   ];
   return (
     <div className="flex items-center gap-3 flex-wrap">
@@ -70,7 +71,7 @@ function ObjectiveSelector({ objective, onChange, targetReturn, onTargetChange }
           className={cn(
             "px-3 py-1.5 rounded-sm text-xs font-semibold border transition-colors cursor-pointer",
             objective === o.value
-              ? "bg-primary/15 text-primary border-primary/30"
+              ? "bg-primary text-primary-foreground border-transparent"
               : "bg-muted text-muted-foreground border-border hover:text-foreground hover:border-border/80"
           )}
         >
@@ -231,16 +232,16 @@ function FrontierChart({ frontierData, loading }) {
             {/* Individual assets */}
             <Scatter name="Assets" data={assets}>
               {assets.map((a, i) => (
-                <Cell key={i} fill="rgba(255,255,255,0.3)" r={5} />
+                <Cell key={i} fill="hsl(217, 91%, 60%)" opacity={0.6} r={4} />
               ))}
             </Scatter>
             {/* Max Sharpe point */}
             {sharpe && (
-              <Scatter name="Max Sharpe" data={[sharpe]} fill="#f59e0b" r={8} />
+              <Scatter name="Max Sharpe" data={[sharpe]} fill="hsl(38, 92%, 50%)" r={7} />
             )}
             {/* Min Vol point */}
             {minVol && (
-              <Scatter name="Min Volatility" data={[minVol]} fill="#22c55e" r={8} />
+              <Scatter name="Min Volatility" data={[minVol]} fill="hsl(142, 71%, 45%)" r={7} />
             )}
           </ScatterChart>
         </ResponsiveContainer>
@@ -346,50 +347,100 @@ function ClusterMap({ riskData, loading }) {
 }
 
 // ─── Advisor Panel ────────────────────────────────────────────────────────────
-function AdvisorPanel({ advice, onNavigateToTrade }) {
-  if (!advice?.length) return null;
+function AdvisorPanel({ tickers, objective, optResult, riskData, isOptimizing }) {
+  const [streamData, setStreamData] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const icons = { warning: AlertTriangle, suggestion: Lightbulb, wildcard: Zap };
-  const colors = {
-    warning: "text-loss border-loss/20 bg-loss/5",
-    suggestion: "text-primary border-primary/20 bg-primary/5",
-    wildcard: "text-warning border-warning/20 bg-warning/5",
+  useEffect(() => {
+    if (!optResult || !riskData) return;
+    if (isOptimizing) return;
+    
+    setLoading(true);
+    setStreamData("");
+    
+    const abortController = new AbortController();
+    const token = localStorage.getItem("novatrade_token");
+    
+    // Support Vercel -> Render routing
+    const baseUrl = import.meta.env.VITE_API_URL || "";
+    const endpointUrl = baseUrl ? `${baseUrl}/optimize/advisor` : "/api/optimize/advisor";
+
+    fetch(endpointUrl, {
+      method: "POST",
+      headers: { 
+        "Content-Type": "application/json",
+        ...(token ? { "Authorization": `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify({ tickers, objective, opt_result: optResult, risk_data: riskData }),
+      signal: abortController.signal
+    })
+    .then(async response => {
+      if (!response.body) return;
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      
+      let buffer = "";
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(trimmed.slice(6));
+              if (data.error) {
+                setStreamData(prev => prev + "\n[Error: " + data.error + "]");
+              } else if (data.content) {
+                setStreamData(prev => prev + data.content);
+              }
+            } catch (e) {}
+          }
+        }
+      }
+    })
+    .finally(() => setLoading(false))
+    .catch(() => {});
+
+    return () => abortController.abort();
+  }, [optResult, riskData, isOptimizing, objective, tickers]);
+
+  if (!optResult || !riskData) {
+    return (
+      <div className="bg-[#0b0c10] border border-border rounded-sm p-6 flex flex-col items-center justify-center h-full min-h-[250px] text-muted-foreground">
+        <Shield className="w-8 h-8 mb-3 opacity-20" />
+        <p className="text-xs">Run optimization to receive AI Analysis</p>
+      </div>
+    );
+  }
+
+  const renderMarkdown = (text) => {
+    if (!text) return null;
+    const parts = text.split(/(\*\*.*?\*\*)/g);
+    return parts.map((part, i) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return <strong key={i} className="font-bold text-foreground">{part.slice(2, -2)}</strong>;
+      }
+      return <span key={i}>{part}</span>;
+    });
   };
 
   return (
-    <div className="bg-[#0b0c10] border border-border rounded-sm overflow-hidden">
-      <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-        <Shield className="w-3.5 h-3.5 text-primary" />
-        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">AI Advisor</h3>
+    <div className="bg-[#0b0c10] border border-border rounded-sm overflow-hidden h-full flex flex-col">
+      <div className="px-4 py-3 border-b border-border flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-2">
+          <Shield className="w-3.5 h-3.5 text-primary" />
+          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">AI Strategy Advisor</h3>
+        </div>
+        {loading && <Loader2 className="w-3.5 h-3.5 text-primary animate-spin" />}
       </div>
-      <div className="p-4 space-y-3">
-        {advice.map((a, i) => {
-          const Icon = icons[a.type] || Lightbulb;
-          return (
-            <div key={i} className={cn("border rounded-sm p-3", colors[a.type] || colors.suggestion)}>
-              <div className="flex items-start gap-2">
-                <Icon className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold">{a.title}</p>
-                  <p className="text-[11px] text-muted-foreground mt-1">{a.message}</p>
-                  {a.tickers?.length > 0 && (
-                    <div className="flex gap-1.5 mt-2">
-                      {a.tickers.map((t) => (
-                        <button
-                          key={t}
-                          onClick={() => onNavigateToTrade(t)}
-                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm bg-muted border border-border text-[10px] font-semibold text-foreground hover:bg-muted/80 transition-colors cursor-pointer"
-                        >
-                          Add {t} <ChevronRight className="w-2.5 h-2.5" />
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          );
-        })}
+      <div className="p-5 flex-1 overflow-y-auto text-sm leading-relaxed text-foreground/90 whitespace-pre-wrap">
+        {streamData ? renderMarkdown(streamData) : (loading ? "Analyzing optimal weights..." : "No analysis available.")}
       </div>
     </div>
   );
@@ -655,9 +706,9 @@ export default function OptimizationPage() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-5">
+      <div className="flex-1 overflow-y-auto p-5 space-y-4">
         {/* Controls */}
-        <div className="bg-[#0b0c10] border border-border rounded-sm p-4 space-y-3">
+        <div className="bg-[#0b0c10] border border-border rounded-sm p-5 space-y-4">
           <div>
             <label className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-1.5 block">
               Tickers
@@ -691,11 +742,14 @@ export default function OptimizationPage() {
         </div>
 
         {/* Cluster Map + Advisor */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-auto min-h-[350px]">
           <ClusterMap riskData={riskData} loading={loadingRisk} />
           <AdvisorPanel
-            advice={riskData?.advice}
-            onNavigateToTrade={(ticker) => navigate(`/trade?symbol=${ticker}`)}
+            tickers={tickers}
+            objective={objective}
+            optResult={optResult}
+            riskData={riskData}
+            isOptimizing={optimizing}
           />
         </div>
 

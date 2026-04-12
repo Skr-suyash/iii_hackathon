@@ -11,6 +11,8 @@ import yfinance as yf
 from pypfopt.expected_returns import mean_historical_return
 from pypfopt.risk_models import CovarianceShrinkage
 from pypfopt.efficient_frontier import EfficientFrontier
+from pypfopt.hierarchical_portfolio import HRPOpt
+from pypfopt import expected_returns
 from pypfopt.discrete_allocation import DiscreteAllocation, get_latest_prices
 from pypfopt import objective_functions
 
@@ -58,7 +60,7 @@ def optimize_portfolio(
     tickers : list[str]
         Ticker symbols to include in optimization.
     objective : str
-        "max_sharpe", "min_volatility", or "efficient_return".
+        "max_sharpe", "min_volatility", "efficient_return", or "hrp".
     target_return : float, optional
         Required when objective is "efficient_return" (e.g. 0.20 for 20%).
     total_value : float, optional
@@ -91,25 +93,28 @@ def optimize_portfolio(
     mu = mean_historical_return(prices_df)
     S = CovarianceShrinkage(prices_df).ledoit_wolf()
 
-    # 3. Optimize
-    ef = EfficientFrontier(mu, S, weight_bounds=(0, 1))
-    ef.add_objective(objective_functions.L2_reg, gamma=0.1)  # Encourage diversification
-
     try:
-        if objective == "min_volatility":
-            ef.min_volatility()
-        elif objective == "efficient_return" and target_return is not None:
-            ef.efficient_return(target_return=target_return)
+        if objective == "hrp":
+            rets = expected_returns.returns_from_prices(prices_df)
+            hrp = HRPOpt(rets)
+            hrp.optimize()
+            weights = hrp.clean_weights()
+            perf = hrp.portfolio_performance(risk_free_rate=risk_free_rate)
         else:
-            # Default: max Sharpe
-            ef.max_sharpe(risk_free_rate=risk_free_rate)
+            ef = EfficientFrontier(mu, S, weight_bounds=(0, 1))
+            ef.add_objective(objective_functions.L2_reg, gamma=0.1)  # Encourage diversification
+            if objective == "min_volatility":
+                ef.min_volatility()
+            elif objective == "efficient_return" and target_return is not None:
+                ef.efficient_return(target_return=target_return)
+            else:
+                # Default: max Sharpe
+                ef.max_sharpe(risk_free_rate=risk_free_rate)
+            weights = ef.clean_weights()
+            perf = ef.portfolio_performance(verbose=False, risk_free_rate=risk_free_rate)
     except Exception as e:
         logger.warning("Optimization failed for objective=%s: %s", objective, e)
         return {"error": f"Optimization failed: {str(e)}"}
-
-    # 4. Clean weights + performance
-    weights = ef.clean_weights()
-    perf = ef.portfolio_performance(verbose=False, risk_free_rate=risk_free_rate)
 
     result: dict = {
         "weights": {k: round(v, 4) for k, v in weights.items()},

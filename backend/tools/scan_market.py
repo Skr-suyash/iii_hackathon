@@ -5,10 +5,16 @@ from config import STOCK_UNIVERSE
 
 
 def run(
-    max_price: float = None,
+    max_price: str | float | None = None,
     sector: str = None,
     condition: str = None,
 ) -> dict:
+    if max_price is not None:
+        try:
+            max_price = float(max_price)
+        except ValueError:
+            max_price = None
+
     results = []
 
     for symbol, info in STOCK_UNIVERSE.items():
