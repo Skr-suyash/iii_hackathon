@@ -202,6 +202,41 @@ export default function TradingChart({ symbol, timeframe, activeIndicators = [] 
     return () => { cancelled = true; };
   }, [symbol, timeframe]);
 
+  // Live polling simulator for hackathon
+  useEffect(() => {
+    const chart = chartInstanceRef.current;
+    if (!chart || !symbol) return;
+    
+    let cancelled = false;
+    const timeMap = {
+      "1D": "1d", "5D": "5d", "1M": "1mo", "3M": "3mo", "6M": "6mo",
+      "YTD": "ytd", "1Y": "1y", "5Y": "5y", "All": "max"
+    };
+    const yfPeriod = timeMap[timeframe] || "6mo";
+
+    const fetchLatestTick = async () => {
+      if (cancelled) return;
+      try {
+        const { data } = await client.get(`/market/${symbol}/chart/latest`, {
+          params: { period: yfPeriod, interval: "auto" }
+        });
+        if (data?.tick && chartInstanceRef.current) {
+          chartInstanceRef.current.updateData(data.tick);
+        }
+      } catch (err) {
+        // Fail silently
+      }
+    };
+
+    // Poll every 3 seconds for live simulation ticks
+    const intervalId = setInterval(fetchLatestTick, 3000);
+    
+    return () => {
+      cancelled = true;
+      clearInterval(intervalId);
+    };
+  }, [symbol, timeframe]);
+
   return (
     <div className="h-full w-full flex flex-col bg-[#0a0a10]">
       <div className="flex-1 min-h-0 relative">
