@@ -8,6 +8,7 @@ import TradePage from "@/pages/TradePage";
 import HoldingsPage from "@/pages/HoldingsPage";
 import WatchlistPage from "@/pages/WatchlistPage";
 import HistoryPage from "@/pages/HistoryPage";
+import OptimizationPage from "@/pages/OptimizationPage";
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated } = useAuth();
@@ -29,6 +30,7 @@ function AppRoutes() {
       >
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/trade" element={<TradePage />} />
+        <Route path="/optimize" element={<OptimizationPage />} />
         <Route path="/holdings" element={<HoldingsPage />} />
         <Route path="/watchlist" element={<WatchlistPage />} />
         <Route path="/history" element={<HistoryPage />} />

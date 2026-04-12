@@ -183,8 +183,22 @@ def get_portfolio(db: Session, user: User) -> dict:
         pct = round((val / total_value) * 100, 1) if total_value > 0 else 0
         sector_breakdown.append({"sector": sector, "pct": pct})
 
-    # Risk score (simple: based on concentration + volatility)
-    risk_score = _compute_risk_score(holdings_data, sector_breakdown)
+    # ML-powered risk score (falls back to naive if ML service fails)
+    try:
+        from services.risk_scoring_service import analyze_portfolio_risk
+        user_values = {h["symbol"]: h["value"] for h in holdings_data}
+        risk_analysis = analyze_portfolio_risk(user_values)
+        risk_score = risk_analysis["risk_score"]
+        risk_label = risk_analysis["risk_label"]
+        diversification_score = risk_analysis["diversification_score"]
+        cluster_weights = risk_analysis.get("portfolio_cluster_weights", {})
+        top_advice = risk_analysis.get("advice", [])[:2]
+    except Exception:
+        risk_score = _compute_naive_risk_score(holdings_data, sector_breakdown)
+        risk_label = "Low" if risk_score <= 33 else ("Moderate" if risk_score <= 66 else "High")
+        diversification_score = 0.0
+        cluster_weights = {}
+        top_advice = []
 
     return {
         "cash": user.balance,
@@ -193,26 +207,28 @@ def get_portfolio(db: Session, user: User) -> dict:
         "pnl_pct": total_pnl_pct,
         "holdings": holdings_data,
         "risk_score": risk_score,
+        "risk_label": risk_label,
+        "diversification_score": diversification_score,
+        "cluster_weights": cluster_weights,
+        "top_advice": top_advice,
         "sector_breakdown": sector_breakdown,
     }
 
 
-def _compute_risk_score(holdings: list, sectors: list) -> int:
-    """Simple risk score 0-100 based on concentration and diversification."""
+def _compute_naive_risk_score(holdings: list, sectors: list) -> int:
+    """Legacy risk score 0-100 based on concentration and diversification.
+    Kept as fallback if ML clustering fails."""
     if not holdings:
         return 0
 
-    # Concentration risk: largest holding % of total
     total_val = sum(h["value"] for h in holdings)
     if total_val == 0:
         return 0
 
     max_pct = max(h["value"] / total_val for h in holdings) * 100
 
-    # Diversification: fewer sectors = higher risk
     num_sectors = len(sectors)
     sector_risk = max(0, 50 - num_sectors * 10)
 
-    # Combine
     score = int(max_pct * 0.6 + sector_risk * 0.4)
     return min(100, max(0, score))

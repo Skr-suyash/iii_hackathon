@@ -110,4 +110,43 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "optimize_portfolio",
+            "description": "Run Modern Portfolio Theory optimization on the user's portfolio using the Efficient Frontier (Markowitz model). Computes optimal allocation weights. Supports 3 objectives: maximize Sharpe ratio (best risk-adjusted return), minimize volatility (safest portfolio), or target a specific annual return. Use when user asks 'optimize my portfolio', 'what's the best allocation', 'rebalance my holdings', or 'reduce my risk'.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "tickers": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of ticker symbols to include. If empty, uses current holdings.",
+                    },
+                    "objective": {
+                        "type": "string",
+                        "enum": ["max_sharpe", "min_volatility", "efficient_return"],
+                        "description": "max_sharpe = best risk-adjusted return, min_volatility = lowest risk, efficient_return = target a specific return.",
+                    },
+                    "target_return": {
+                        "type": "number",
+                        "description": "Target annual return (e.g. 0.20 for 20%). Only for efficient_return objective.",
+                    },
+                },
+                "required": ["objective"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "analyze_risk",
+            "description": "Run ML-powered risk analysis on the user's portfolio. Uses K-Means clustering and PCA to discover hidden correlations between holdings (beyond simple sector labels). Returns a risk score 0-100, identifies over-concentrated behavioral clusters, and suggests specific stocks to improve diversification. Use when user asks 'how risky is my portfolio', 'am I diversified enough', 'what's my concentration risk', or 'which stocks should I add for safety'.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        },
+    },
 ]

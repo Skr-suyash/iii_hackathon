@@ -2,6 +2,7 @@ import { NavLink } from "react-router-dom";
 import {
   LayoutDashboard,
   TrendingUp,
+  Target,
   Briefcase,
   Eye,
   History,
@@ -16,6 +17,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
   { icon: TrendingUp, label: "Trade", path: "/trade" },
+  { icon: Target, label: "Optimize", path: "/optimize" },
   { icon: Briefcase, label: "Holdings", path: "/holdings" },
   { icon: Eye, label: "Watchlist", path: "/watchlist" },
   { icon: History, label: "History", path: "/history" },

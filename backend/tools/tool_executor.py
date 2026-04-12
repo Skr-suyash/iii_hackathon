@@ -35,5 +35,13 @@ async def execute_tool(db: Session, user: User, tool_name: str, args: dict) -> d
         from tools.create_conditional_order import run
         return run(db, user, **args)
 
+    elif tool_name == "optimize_portfolio":
+        from tools.optimize_portfolio import run
+        return run(db, user, **args)
+
+    elif tool_name == "analyze_risk":
+        from tools.analyze_risk import run
+        return run(db, user)
+
     else:
         return {"error": f"Unknown tool: {tool_name}"}

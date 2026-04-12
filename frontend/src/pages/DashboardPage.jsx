@@ -131,6 +131,25 @@ function RiskMetricsTable({ analytics, portfolio }) {
                 ${analytics.cash.toLocaleString("en-US", { minimumFractionDigits: 2 })}
               </td>
             </tr>
+            {portfolio?.risk_score !== undefined && (
+              <tr className="border-t border-border/50">
+                <td className="py-2.5 px-4 text-muted-foreground">ML Risk Score</td>
+                <td className={cn("py-2.5 px-4 text-right mono font-bold",
+                  portfolio.risk_score > 66 ? "text-loss" :
+                  portfolio.risk_score > 33 ? "text-warning" : "text-profit"
+                )}>
+                  {portfolio.risk_score}/100
+                </td>
+              </tr>
+            )}
+            {portfolio?.diversification_score !== undefined && (
+              <tr className="border-t border-border/50">
+                <td className="py-2.5 px-4 text-muted-foreground">Diversification</td>
+                <td className="py-2.5 px-4 text-right mono font-bold text-foreground">
+                  {(portfolio.diversification_score * 100).toFixed(0)}%
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -495,6 +514,20 @@ export default function DashboardPage() {
             
             {/* Holdings Performance */}
             <HoldingsPerformanceBar holdings={holdings} />
+
+            {/* Advisor Alert */}
+            {portfolio?.top_advice?.[0] && (
+              <div className="bg-warning/5 border border-warning/20 rounded-sm p-3 mt-4">
+                <p className="text-xs font-semibold text-warning">⚠️ {portfolio.top_advice[0].title}</p>
+                <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">{portfolio.top_advice[0].message}</p>
+                <button
+                  onClick={() => navigate("/optimize")}
+                  className="text-xs text-primary font-semibold mt-2 hover:underline cursor-pointer"
+                >
+                  View Optimization →
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
