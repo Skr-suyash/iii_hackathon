@@ -1,11 +1,19 @@
 """NovaTrade — Sentiment analysis service via Gemma 4 or fallback."""
 
 import httpx
+import time
 from config import OLLAMA_URL, OLLAMA_MODEL, OLLAMA_TIMEOUT, STOCK_UNIVERSE
 
+_sentiment_cache = {}
+CACHE_TTL = 1800  # Cache sentiment for 30 minutes
 
 async def get_sentiment(symbol: str) -> dict:
     """Get AI-analyzed sentiment for a stock. Uses Gemma 4 via Ollama and yfinance news."""
+    now = time.time()
+    cached = _sentiment_cache.get(symbol)
+    if cached and (now - cached["timestamp"]) < CACHE_TTL:
+        return cached["data"]
+
     info = STOCK_UNIVERSE.get(symbol)
     if not info:
         return {"sentiment": "neutral", "confidence": 0, "summary": "Unknown stock"}
@@ -17,9 +25,17 @@ async def get_sentiment(symbol: str) -> dict:
         news_items = ticker.news
         if news_items:
             for item in news_items[:8]:
-                title = item.get("title", "")
-                publisher = item.get("publisher", "")
-                news_text += f"- [{publisher}] {title}\n"
+                if "content" in item:
+                    content_data = item.get("content", {})
+                    title = content_data.get("title", "")
+                    provider = content_data.get("provider", {})
+                    publisher = provider.get("displayName", "")
+                else:
+                    title = item.get("title", "")
+                    publisher = item.get("publisher", "")
+                
+                if title:
+                    news_text += f"- [{publisher}] {title}\n"
     except Exception as e:
         print(f"Error fetching news for {symbol}: {e}")
 
@@ -58,20 +74,24 @@ Respond in this exact JSON format only:
             end = content.rfind("}") + 1
             if start != -1 and end > start:
                 parsed = json.loads(content[start:end])
-                return {
+                output = {
                     "symbol": symbol,
                     "sentiment": parsed.get("sentiment", "neutral"),
                     "confidence": parsed.get("confidence", "medium"),
                     "summary": parsed.get("summary", "No summary available"),
                 }
+                _sentiment_cache[symbol] = {"data": output, "timestamp": time.time()}
+                return output
 
     except Exception:
         pass
 
     # Fallback — return neutral sentiment
-    return {
+    fallback = {
         "symbol": symbol,
         "sentiment": "neutral",
         "confidence": "low",
         "summary": f"Unable to analyze sentiment for {symbol} at this time.",
     }
+    _sentiment_cache[symbol] = {"data": fallback, "timestamp": time.time()}
+    return fallback

@@ -5,6 +5,7 @@ const CONFIGS = {
   bullish: { emoji: "🟢", variant: "profit", label: "Bullish" },
   bearish: { emoji: "🔴", variant: "loss", label: "Bearish" },
   neutral: { emoji: "🟡", variant: "warning", label: "Neutral" },
+  loading: { emoji: "⏳", variant: "outline", label: "Analyzing..." },
 };
 
 export default function SentimentBadge({ sentiment, className }) {

@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 export default function TradePage() {
   const [symbol, setSymbol] = useState("AAPL");
   const [timeframe, setTimeframe] = useState("1D");
-  const [activeIndicators, setActiveIndicators] = useState(["MACD@tv-basicstudies"]);
+  const [activeIndicators, setActiveIndicators] = useState(["VOL", "MA"]);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [bottomPanelOpen, setBottomPanelOpen] = useState(true);
   const [rightPanelOpen, setRightPanelOpen] = useState(true);

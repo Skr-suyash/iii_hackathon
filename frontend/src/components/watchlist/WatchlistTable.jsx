@@ -26,6 +26,10 @@ export default function WatchlistTable() {
 
   useEffect(() => {
     fetchWatchlist();
+    const interval = setInterval(() => {
+      fetchWatchlist();
+    }, 10000);
+    return () => clearInterval(interval);
   }, []);
 
   async function removeItem(symbol) {
@@ -49,9 +53,6 @@ export default function WatchlistTable() {
 
   return (
     <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base">Watchlist</CardTitle>
-      </CardHeader>
       <CardContent className="p-0">
         <Table>
           <TableHeader>
@@ -65,7 +66,17 @@ export default function WatchlistTable() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {items.map((item) => (
+            {loading && (
+              <TableRow>
+                <TableCell colSpan={6} className="h-24 text-center">
+                  <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                    <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                    Loading...
+                  </div>
+                </TableCell>
+              </TableRow>
+            )}
+            {!loading && items.map((item) => (
               <TableRow key={item.symbol}>
                 <TableCell className="font-semibold">{item.symbol}</TableCell>
                 <TableCell className="text-muted-foreground text-xs">{item.name}</TableCell>

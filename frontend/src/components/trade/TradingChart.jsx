@@ -2,20 +2,6 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { init, dispose } from "klinecharts";
 import client from "@/api/client";
 import { cn } from "@/lib/utils";
-const PERIODS = [
-  { label: "1M", value: "1mo" },
-  { label: "3M", value: "3mo" },
-  { label: "6M", value: "6mo" },
-  { label: "1Y", value: "1y" },
-  { label: "5Y", value: "5y" },
-];
-const INDICATOR_LIST = [
-  { label: "VOL", name: "VOL", isStack: false },
-  { label: "MA", name: "MA", isStack: true, paneId: "candle_pane" },
-  { label: "MACD", name: "MACD", isStack: false },
-  { label: "RSI", name: "RSI", isStack: false },
-  { label: "BOLL", name: "BOLL", isStack: true, paneId: "candle_pane" },
-];
 const CHART_STYLES = {
   grid: {
     show: true,
@@ -111,29 +97,69 @@ const CHART_STYLES = {
     },
   },
 };
-export default function TradingChart({ symbol }) {
+
+const MAIN_PANE_INDICATORS = ["MA", "EMA", "SMA", "BOLL", "SAR"];
+
+export default function TradingChart({ symbol, timeframe, activeIndicators = [] }) {
   const chartContainerRef = useRef(null);
   const chartInstanceRef = useRef(null);
-  const [period, setPeriod] = useState("6mo");
   const [loading, setLoading] = useState(false);
-  const [activeIndicators, setActiveIndicators] = useState(["VOL", "MA"]);
+  
+  // Track which indicator controls which pane ID
   const indicatorPaneIdsRef = useRef({});
+
   // Initialize chart
   useEffect(() => {
     if (!chartContainerRef.current) return;
     const chart = init(chartContainerRef.current, { styles: CHART_STYLES });
     chartInstanceRef.current = chart;
-    if (chart) {
-      const volPaneId = chart.createIndicator("VOL");
-      indicatorPaneIdsRef.current["VOL"] = volPaneId;
-      chart.createIndicator("MA", true, { id: "candle_pane" });
-      indicatorPaneIdsRef.current["MA"] = "candle_pane";
-    }
+    
     return () => {
       if (chartContainerRef.current) dispose(chartContainerRef.current);
       chartInstanceRef.current = null;
     };
   }, []);
+
+  // Sync indicators with chart
+  useEffect(() => {
+    const chart = chartInstanceRef.current;
+    if (!chart) return;
+
+    // Detect indicators that were added
+    const currentIndicatorsList = Object.keys(indicatorPaneIdsRef.current);
+    
+    // Process Additions
+    activeIndicators.forEach((ind) => {
+      if (!currentIndicatorsList.includes(ind)) {
+        if (MAIN_PANE_INDICATORS.includes(ind)) {
+          // Overlay directly on the main candle pane
+          chart.createIndicator(ind, true, { id: "candle_pane" });
+          indicatorPaneIdsRef.current[ind] = "candle_pane";
+        } else {
+          // Creates a new independent bottom pane and stores the returning ID
+          const paneId = chart.createIndicator(ind);
+          indicatorPaneIdsRef.current[ind] = paneId;
+        }
+      }
+    });
+
+    // Process Removals
+    currentIndicatorsList.forEach((ind) => {
+      if (!activeIndicators.includes(ind)) {
+        const paneId = indicatorPaneIdsRef.current[ind];
+        // If it was on candle pane, just remove the indicator string.
+        // Otherwise, COMPLETELY remove the created pane.
+        if (paneId === "candle_pane") {
+          chart.removeIndicator("candle_pane", ind);
+        } else if (paneId) {
+          chart.removeIndicator(paneId);
+        }
+        delete indicatorPaneIdsRef.current[ind];
+      }
+    });
+
+  }, [activeIndicators]);
+
   // Resize observer
   useEffect(() => {
     if (!chartContainerRef.current) return;
@@ -141,14 +167,30 @@ export default function TradingChart({ symbol }) {
     observer.observe(chartContainerRef.current);
     return () => observer.disconnect();
   }, []);
+
   // Fetch data when symbol or period changes
   useEffect(() => {
     const chart = chartInstanceRef.current;
     if (!chart || !symbol) return;
     let cancelled = false;
     setLoading(true);
+    
+    // Map standard app timeframes to expected backend format (yfinance lowercase strings)
+    const timeMap = {
+      "1D": "1d",
+      "5D": "5d",
+      "1M": "1mo",
+      "3M": "3mo",
+      "6M": "6mo",
+      "YTD": "ytd",
+      "1Y": "1y",
+      "5Y": "5y",
+      "All": "max"
+    };
+    const yfPeriod = timeMap[timeframe] || "6mo";
+
     client
-      .get(`/market/${symbol}/chart`, { params: { period, interval: "auto" } })
+      .get(`/market/${symbol}/chart`, { params: { period: yfPeriod, interval: "auto" } })
       .then(({ data }) => {
         if (cancelled) return;
         if (data?.data && data.data.length > 0) {
@@ -158,63 +200,10 @@ export default function TradingChart({ symbol }) {
       .catch((err) => console.error("Failed to fetch chart data:", err))
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [symbol, period]);
-  // Toggle indicator
-  const toggleIndicator = useCallback((ind) => {
-    const chart = chartInstanceRef.current;
-    if (!chart) return;
-    setActiveIndicators((prev) => {
-      const isActive = prev.includes(ind.name);
-      if (isActive) {
-        const paneId = indicatorPaneIdsRef.current[ind.name];
-        if (ind.paneId === "candle_pane") {
-          chart.removeIndicator("candle_pane", ind.name);
-        } else if (paneId) {
-          chart.removeIndicator(paneId, ind.name);
-        }
-        delete indicatorPaneIdsRef.current[ind.name];
-        return prev.filter((n) => n !== ind.name);
-      } else {
-        if (ind.paneId === "candle_pane") {
-          chart.createIndicator(ind.name, true, { id: "candle_pane" });
-          indicatorPaneIdsRef.current[ind.name] = "candle_pane";
-        } else {
-          const paneId = chart.createIndicator(ind.name);
-          indicatorPaneIdsRef.current[ind.name] = paneId;
-        }
-        return [...prev, ind.name];
-      }
-    });
-  }, []);
+  }, [symbol, timeframe]);
+
   return (
     <div className="h-full w-full flex flex-col bg-[#0a0a10]">
-      <div className="flex items-center justify-between px-3 py-1.5 border-b border-border bg-sidebar shrink-0 gap-2">
-        <div className="flex items-center gap-0.5">
-          {PERIODS.map((p) => (
-            <button key={p.value} onClick={() => setPeriod(p.value)}
-              className={cn(
-                "text-[11px] font-medium px-2.5 py-1 rounded-sm transition-all duration-150",
-                period === p.value
-                  ? "bg-primary/20 text-primary shadow-sm"
-                  : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
-              )}>{p.label}</button>
-          ))}
-        </div>
-        <div className="flex items-center gap-0.5">
-          <span className="text-[10px] text-muted-foreground mr-1.5 uppercase tracking-wider hidden sm:inline">
-            Indicators
-          </span>
-          {INDICATOR_LIST.map((ind) => (
-            <button key={ind.name} onClick={() => toggleIndicator(ind)}
-              className={cn(
-                "text-[11px] font-medium px-2.5 py-1 rounded-sm transition-all duration-150",
-                activeIndicators.includes(ind.name)
-                  ? "bg-indigo-500/20 text-indigo-400"
-                  : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
-              )}>{ind.label}</button>
-          ))}
-        </div>
-      </div>
       <div className="flex-1 min-h-0 relative">
         <div ref={chartContainerRef}
           style={{ width: "100%", height: "100%", backgroundColor: "#0a0a10" }} />

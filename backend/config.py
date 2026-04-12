@@ -2,7 +2,7 @@
 
 # ---------- Ollama / AI ----------
 OLLAMA_URL = "http://localhost:11434/api/chat"
-OLLAMA_MODEL = "gemma-aggressive:latest"
+OLLAMA_MODEL = "gemma4:e2b"
 OLLAMA_TEMPERATURE = 0
 OLLAMA_NUM_CTX = 8192
 OLLAMA_TIMEOUT = 120.0

@@ -3,11 +3,21 @@ import { Plus, Trash2, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import client from "@/api/client";
+import { useMarketData } from "@/hooks/useMarketData";
 
 function WatchlistWidget({ onSelectSymbol }) {
+  const { stocks } = useMarketData();
   const [items, setItems] = useState([]);
   const [addSymbol, setAddSymbol] = useState("");
+  const [isAdding, setIsAdding] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  const filtered = stocks.filter(
+    (s) =>
+      addSymbol &&
+      (s.symbol.toLowerCase().includes(addSymbol.toLowerCase()) ||
+        s.name.toLowerCase().includes(addSymbol.toLowerCase()))
+  );
 
   async function fetchWatchlist() {
     try {
@@ -25,11 +35,26 @@ function WatchlistWidget({ onSelectSymbol }) {
   }, []);
 
   async function handleAdd(e) {
-    e.preventDefault();
-    if (!addSymbol.trim()) return;
+    if (e) e.preventDefault();
+    if (!addSymbol.trim()) {
+      setIsAdding(false);
+      return;
+    }
     try {
       await client.post("/watchlist", { symbol: addSymbol.trim().toUpperCase() });
       setAddSymbol("");
+      setIsAdding(false);
+      fetchWatchlist();
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function handleAddDirect(symbol) {
+    try {
+      await client.post("/watchlist", { symbol: symbol.toUpperCase() });
+      setAddSymbol("");
+      setIsAdding(false);
       fetchWatchlist();
     } catch (err) {
       console.error(err);
@@ -48,16 +73,56 @@ function WatchlistWidget({ onSelectSymbol }) {
   return (
     <div className="flex flex-col flex-1 min-h-0">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-border">
+      <div className="relative flex items-center justify-between px-3 py-2 border-b border-border h-[41px]">
         <span className="text-xs font-semibold text-foreground tracking-wide uppercase">Watchlist</span>
-        <form onSubmit={handleAdd} className="flex items-center gap-1">
-          <input
-            className="bg-transparent text-xs outline-none w-16 text-foreground placeholder:text-muted-foreground border-b border-transparent focus:border-primary transition-colors"
-            placeholder="+ Add"
-            value={addSymbol}
-            onChange={(e) => setAddSymbol(e.target.value)}
-          />
-        </form>
+        {isAdding ? (
+          <form onSubmit={handleAdd} className="flex items-center gap-1.5 relative">
+            <input
+              autoFocus
+              className="bg-transparent text-xs outline-none w-20 text-foreground placeholder:text-muted-foreground border-b border-primary/50 focus:border-primary transition-colors"
+              placeholder="Tick..."
+              value={addSymbol}
+              onChange={(e) => setAddSymbol(e.target.value)}
+            />
+            <button
+              type="submit"
+              className="text-[10px] text-primary hover:text-primary-foreground font-medium cursor-pointer shrink-0"
+            >
+              Add
+            </button>
+
+            {/* Autocomplete Dropdown */}
+            {filtered.length > 0 && addSymbol && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setIsAdding(false)} />
+                <div className="absolute z-50 top-full right-0 mt-1 w-48 bg-popover border border-border rounded-sm shadow-xl max-h-48 overflow-y-auto">
+                  {filtered.map((s) => (
+                    <button
+                      key={s.symbol}
+                      type="button"
+                      className="w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-accent transition-colors cursor-pointer text-left"
+                      onClick={() => handleAddDirect(s.symbol)}
+                    >
+                      <div>
+                        <span className="font-semibold text-foreground block">{s.symbol}</span>
+                        <span className="text-[10px] text-muted-foreground truncate max-w-[80px] block">{s.name}</span>
+                      </div>
+                      <span className="mono font-medium">${s.price?.toFixed(2)}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </form>
+        ) : (
+          <button
+            onClick={() => setIsAdding(true)}
+            className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+          >
+            <Plus className="h-3 w-3" />
+            Add
+          </button>
+        )}
       </div>
 
       {/* Column headers */}
@@ -92,6 +157,12 @@ function WatchlistWidget({ onSelectSymbol }) {
             </button>
           </div>
         ))}
+        {loading && (
+          <div className="px-3 py-6 flex flex-col items-center justify-center gap-2 text-xs text-muted-foreground">
+            <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+            Loading...
+          </div>
+        )}
         {!loading && items.length === 0 && (
           <div className="px-3 py-6 text-center text-xs text-muted-foreground">
             No symbols in watchlist

@@ -9,33 +9,32 @@ const INDICATOR_GROUPS = [
   {
     name: "Volume",
     items: [
-      { id: "EaseOfMovement@tv-basicstudies", label: "Ease of Movement (EOM)" },
-      { id: "ChaikinMoneyFlow@tv-basicstudies", label: "Chaikin Money Flow (CMF)" },
-      { id: "OnBalanceVolume@tv-basicstudies", label: "On Balance Volume (OBV)" },
+      { id: "VOL", label: "Volume (VOL)" },
+      { id: "OBV", label: "On Balance Volume (OBV)" },
+      { id: "EMV", label: "Ease of Movement (EMV)" },
     ],
   },
   {
     name: "Trend",
     items: [
-      { id: "MACD@tv-basicstudies", label: "MACD" },
-      { id: "DirectionalMovement@tv-basicstudies", label: "Directional Movement (ADX)" },
-      { id: "MASimple@tv-basicstudies", label: "Moving Average (MA)" },
+      { id: "MACD", label: "MACD" },
+      { id: "MA", label: "Moving Average (MA)" },
+      { id: "EMA", label: "Exp. Moving Average (EMA)" },
     ],
   },
   {
     name: "Volatility",
     items: [
-      { id: "BB@tv-basicstudies", label: "Bollinger Bands" },
-      { id: "ATR@tv-basicstudies", label: "Average True Range (ATR)" },
+      { id: "BOLL", label: "Bollinger Bands (BOLL)" },
+      { id: "SAR", label: "Parabolic SAR (SAR)" },
     ],
   },
   {
     name: "Momentum",
     items: [
-      { id: "RSI@tv-basicstudies", label: "Relative Strength Index (RSI)" },
-      { id: "Stochastic@tv-basicstudies", label: "Stochastic Oscillator" },
-      { id: "CCI@tv-basicstudies", label: "Commodity Channel Index (CCI)" },
-      { id: "ChandeMO@tv-basicstudies", label: "Chande Momentum (CMO)" },
+      { id: "RSI", label: "Relative Strength Index (RSI)" },
+      { id: "KDJ", label: "KDJ Oscillator" },
+      { id: "CCI", label: "Commodity Channel Index (CCI)" },
     ],
   },
 ];
