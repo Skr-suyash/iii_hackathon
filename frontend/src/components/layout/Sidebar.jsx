@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
   TrendingUp,
@@ -35,8 +35,8 @@ function SidebarIcon({ children, tooltip, onClick, active, asChild }) {
             className={cn(
               "flex items-center justify-center w-10 h-10 rounded-sm transition-colors duration-150 cursor-pointer",
               active
-                ? "bg-primary/15 text-primary"
-                : "text-sidebar-foreground hover:text-foreground hover:bg-muted"
+                ? "!text-blue-500 bg-transparent"
+                : "text-sidebar-foreground hover:!text-blue-500 bg-transparent"
             )}
           >
             {children}
@@ -52,6 +52,7 @@ function SidebarIcon({ children, tooltip, onClick, active, asChild }) {
 
 export default function Sidebar({ copilotOpen, onToggleCopilot }) {
   const { user, logout } = useAuth();
+  const location = useLocation();
 
   return (
     <div className="flex flex-col items-center h-full w-14 bg-sidebar border-r border-sidebar-border shrink-0">
@@ -66,24 +67,25 @@ export default function Sidebar({ copilotOpen, onToggleCopilot }) {
       <div className="w-8 h-px bg-border mb-2" />
 
       {/* Navigation */}
-      <nav className="flex-1 flex flex-col items-center ml-[20px] gap-0.5">
-        {navItems.map((item) => (
-          <SidebarIcon key={item.path} tooltip={item.label} asChild>
-            <NavLink
-              to={item.path}
-              className={({ isActive }) =>
-                cn(
+      <nav className="flex-1 flex flex-col items-center ml-[5px] gap-0.5">
+        {navItems.map((item) => {
+          const isActive = location.pathname.startsWith(item.path);
+          return (
+            <SidebarIcon key={item.path} tooltip={item.label} asChild>
+              <NavLink
+                to={item.path}
+                className={cn(
                   "flex items-center justify-center w-10 h-10 rounded-sm transition-colors duration-150",
                   isActive
-                    ? "bg-primary/15 text-primary"
-                    : "text-sidebar-foreground hover:text-foreground hover:bg-muted"
-                )
-              }
-            >
-              <item.icon className="h-[18px] w-[18px]" />
-            </NavLink>
-          </SidebarIcon>
-        ))}
+                    ? "!text-blue-500 bg-transparent"
+                    : "text-sidebar-foreground hover:!text-blue-500 bg-transparent"
+                )}
+              >
+                <item.icon className="h-[18px] w-[18px]" />
+              </NavLink>
+            </SidebarIcon>
+          );
+        })}
       </nav>
 
       {/* Bottom actions */}

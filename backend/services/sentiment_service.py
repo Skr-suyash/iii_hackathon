@@ -1,97 +1,168 @@
-"""NovaTrade — Sentiment analysis service via Gemma 4 or fallback."""
+"""NovaTrade — Sentiment analysis service via ProsusAI/FinBERT.
 
-import httpx
+Replaces the previous Ollama/Gemma 4 approach with a lightweight, purpose-built
+financial sentiment classification model (~210 MB, <100 ms per batch).
+"""
+
+import logging
 import time
-from config import OLLAMA_URL, OLLAMA_MODEL, OLLAMA_TIMEOUT, STOCK_UNIVERSE
+import asyncio
 
-_sentiment_cache = {}
-CACHE_TTL = 1800  # Cache sentiment for 30 minutes
+import yfinance as yf
+from config import STOCK_UNIVERSE
 
+logger = logging.getLogger("novatrade.sentiment")
+
+# ---------------------------------------------------------------------------
+# Lazy-loaded FinBERT pipeline (singleton, stays resident after first call)
+# ---------------------------------------------------------------------------
+_finbert_pipeline = None
+
+LABEL_MAP = {
+    "positive": "bullish",
+    "negative": "bearish",
+    "neutral":  "neutral",
+}
+
+
+def _get_pipeline():
+    """Load FinBERT on first use.  Kept out of module-level so the import
+    doesn't block server startup while weights are downloading."""
+    global _finbert_pipeline
+    if _finbert_pipeline is None:
+        logger.info("Loading ProsusAI/FinBERT model (first call — may download ~210 MB)…")
+        from transformers import pipeline as hf_pipeline
+        try:
+            _finbert_pipeline = hf_pipeline(
+                "sentiment-analysis",
+                model="ProsusAI/finbert",
+                device=0,          # GPU if available
+                truncation=True,
+            )
+        except Exception:
+            # Fallback to CPU if CUDA unavailable
+            logger.warning("GPU unavailable, loading FinBERT on CPU.")
+            _finbert_pipeline = hf_pipeline(
+                "sentiment-analysis",
+                model="ProsusAI/finbert",
+                device=-1,
+                truncation=True,
+            )
+        logger.info("FinBERT loaded successfully.")
+    return _finbert_pipeline
+
+
+# ---------------------------------------------------------------------------
+# Cache
+# ---------------------------------------------------------------------------
+_sentiment_cache: dict = {}
+CACHE_TTL = 1800  # 30 minutes
+
+
+# ---------------------------------------------------------------------------
+# Public API — identical return shape to the old Ollama-based service
+# ---------------------------------------------------------------------------
 async def get_sentiment(symbol: str) -> dict:
-    """Get AI-analyzed sentiment for a stock. Uses Gemma 4 via Ollama and yfinance news."""
+    """Classify recent news headlines for *symbol* using FinBERT.
+
+    Returns: {"symbol", "sentiment", "confidence", "summary"}
+    """
     now = time.time()
     cached = _sentiment_cache.get(symbol)
     if cached and (now - cached["timestamp"]) < CACHE_TTL:
-        return cached["data"]
+        # Skip placeholder entries written by the watchlist router —
+        # these must NOT short-circuit the actual FinBERT classification.
+        if cached["data"].get("sentiment") != "loading":
+            return cached["data"]
 
     info = STOCK_UNIVERSE.get(symbol)
     if not info:
-        return {"sentiment": "neutral", "confidence": 0, "summary": "Unknown stock"}
+        return {"symbol": symbol, "sentiment": "neutral", "confidence": 0, "summary": "Unknown stock"}
 
-    news_text = ""
-    try:
-        import yfinance as yf
-        ticker = yf.Ticker(symbol)
-        news_items = ticker.news
-        if news_items:
-            for item in news_items[:8]:
-                if "content" in item:
-                    content_data = item.get("content", {})
-                    title = content_data.get("title", "")
-                    provider = content_data.get("provider", {})
-                    publisher = provider.get("displayName", "")
-                else:
-                    title = item.get("title", "")
-                    publisher = item.get("publisher", "")
-                
-                if title:
-                    news_text += f"- [{publisher}] {title}\n"
-    except Exception as e:
-        print(f"Error fetching news for {symbol}: {e}")
+    # ---- 1. Fetch headlines via yfinance (in a thread to avoid blocking) ----
+    headlines = await asyncio.to_thread(_fetch_headlines, symbol)
 
-    prompt = f"""Analyze the current market sentiment for {info['name']} ({symbol}) in the {info['sector']} sector.
+    if not headlines:
+        fallback = {
+            "symbol": symbol,
+            "sentiment": "neutral",
+            "confidence": 0.0,
+            "summary": f"No recent news available for {info['name']}.",
+        }
+        _sentiment_cache[symbol] = {"data": fallback, "timestamp": time.time()}
+        return fallback
 
-Recent News:
-{news_text if news_text else "No recent news available."}
+    # ---- 2. Classify all headlines in one FinBERT batch ----
+    result = await asyncio.to_thread(_classify_headlines, headlines)
 
-Based on your knowledge and the news provided above, provide:
-1. Overall sentiment: bullish, bearish, or neutral
-2. Confidence: high, medium, or low
-3. Brief 1-sentence summary summarizing the sentiment and news.
-
-Respond in this exact JSON format only:
-{{"sentiment": "bullish|bearish|neutral", "confidence": "high|medium|low", "summary": "..."}}"""
-
-    try:
-        async with httpx.AsyncClient(timeout=OLLAMA_TIMEOUT) as client:
-            response = await client.post(
-                OLLAMA_URL,
-                json={
-                    "model": OLLAMA_MODEL,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "stream": False,
-                    "options": {"temperature": 0, "num_ctx": 2048},
-                },
-            )
-            response.raise_for_status()
-            result = response.json()
-            content = result.get("message", {}).get("content", "")
-
-            # Try to parse JSON from response
-            import json
-            # Find JSON in response
-            start = content.find("{")
-            end = content.rfind("}") + 1
-            if start != -1 and end > start:
-                parsed = json.loads(content[start:end])
-                output = {
-                    "symbol": symbol,
-                    "sentiment": parsed.get("sentiment", "neutral"),
-                    "confidence": parsed.get("confidence", "medium"),
-                    "summary": parsed.get("summary", "No summary available"),
-                }
-                _sentiment_cache[symbol] = {"data": output, "timestamp": time.time()}
-                return output
-
-    except Exception:
-        pass
-
-    # Fallback — return neutral sentiment
-    fallback = {
+    output = {
         "symbol": symbol,
-        "sentiment": "neutral",
-        "confidence": "low",
-        "summary": f"Unable to analyze sentiment for {symbol} at this time.",
+        "sentiment": result["sentiment"],
+        "confidence": result["confidence"],
+        "summary": result["summary"],
     }
-    _sentiment_cache[symbol] = {"data": fallback, "timestamp": time.time()}
-    return fallback
+    _sentiment_cache[symbol] = {"data": output, "timestamp": time.time()}
+    return output
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+def _fetch_headlines(symbol: str) -> list[str]:
+    """Pull up to 8 headline strings from yfinance."""
+    try:
+        ticker = yf.Ticker(symbol)
+        news_items = ticker.news or []
+        titles = []
+        for item in news_items[:8]:
+            if "content" in item:
+                title = (item.get("content") or {}).get("title", "")
+            else:
+                title = item.get("title", "")
+            if title:
+                titles.append(title)
+        return titles
+    except Exception as e:
+        logger.error("Error fetching headlines for %s: %s", symbol, e)
+        return []
+
+
+def _classify_headlines(headlines: list[str]) -> dict:
+    """Run FinBERT on a batch of headlines and aggregate the results."""
+    pipe = _get_pipeline()
+    results = pipe(headlines)  # [{label, score}, …]
+
+    # Count weighted votes — dampen neutral heavily so directional signals surface.
+    # FinBERT is conservative; most factual headlines score "neutral".
+    # For a hackathon trading copilot demo, we want it to be highly sensitive
+    # to directional signals (bullish/bearish), so we scale neutral votes down to 15%.
+    NEUTRAL_DAMPEN = 0.15
+    scores = {"bullish": 0.0, "bearish": 0.0, "neutral": 0.0}
+    for i, res in enumerate(results):
+        mapped = LABEL_MAP.get(res["label"], "neutral")
+        # Weight more recent headlines slightly higher (first = newest)
+        weight = 1.0 + (len(results) - i) * 0.1
+        effective = res["score"] * weight
+        if mapped == "neutral":
+            effective *= NEUTRAL_DAMPEN
+        scores[mapped] += effective
+
+    # Winner takes all
+    winner = max(scores, key=scores.get)
+
+    # Confidence = normalised share of the winning label
+    total = sum(scores.values()) or 1.0
+    confidence = round(scores[winner] / total, 2)
+
+    # Build a compact human-readable summary
+    bull_count = sum(1 for r in results if LABEL_MAP.get(r["label"]) == "bullish")
+    bear_count = sum(1 for r in results if LABEL_MAP.get(r["label"]) == "bearish")
+    neut_count = len(results) - bull_count - bear_count
+
+    summary = (
+        f"Analyzed {len(results)} recent headlines: "
+        f"{bull_count} bullish, {bear_count} bearish, {neut_count} neutral. "
+        f"Overall sentiment is {winner} with {confidence:.0%} confidence."
+    )
+
+    return {"sentiment": winner, "confidence": confidence, "summary": summary}

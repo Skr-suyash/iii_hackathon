@@ -15,8 +15,9 @@ from config import STOCK_UNIVERSE
 
 router = APIRouter(prefix="/api/watchlist", tags=["watchlist"])
 
-def run_sentiment_bg(symbol: str):
-    asyncio.run(get_sentiment(symbol))
+async def run_sentiment_bg(symbol: str):
+    """Fire-and-forget sentiment fetch (FinBERT is fast, no nested loop needed)."""
+    await get_sentiment(symbol)
 
 
 class WatchlistAdd(BaseModel):
@@ -38,13 +39,22 @@ async def get_watchlist(
         cached = _sentiment_cache.get(item.symbol)
         if cached and (now - cached["timestamp"]) < CACHE_TTL:
             sentiment_val = cached["data"].get("sentiment", "neutral")
+            # If a previous request set "loading" but the background task
+            # hasn't finished yet, check if it's been more than 30s and retry.
+            if sentiment_val == "loading" and (now - cached["timestamp"]) > 30:
+                sentiment_val = "loading"
+                _sentiment_cache[item.symbol] = {
+                    "data": {"sentiment": "loading"},
+                    "timestamp": now,
+                }
+                background_tasks.add_task(run_sentiment_bg, item.symbol)
         else:
             sentiment_val = "loading"
-            # Pre-mark the cache to prevent the frontend polling from spawning
-            # duplicate LLM background tasks while we wait for the first one to finish.
+            # Use a short timestamp (30s in the past) so the placeholder
+            # expires quickly if the background task fails silently.
             _sentiment_cache[item.symbol] = {
                 "data": {"sentiment": "loading"},
-                "timestamp": now
+                "timestamp": now - CACHE_TTL + 45,   # expires in ~45 seconds
             }
             background_tasks.add_task(run_sentiment_bg, item.symbol)
 
