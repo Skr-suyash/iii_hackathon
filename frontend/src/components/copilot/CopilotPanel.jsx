@@ -39,7 +39,9 @@ export default function CopilotPanel() {
       const conversation = messages.slice(-10).map(({ role, content }) => ({ role, content }));
       const token = localStorage.getItem("novatrade_token");
 
-      const response = await fetch("/api/copilot/chat", {
+      const baseUrl = import.meta.env.VITE_API_URL || "";
+      const endpointUrl = baseUrl ? `${baseUrl}/copilot/chat` : "/api/copilot/chat";
+      const response = await fetch(endpointUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
