@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from database import init_db
-from services.condition_monitor import run_condition_monitor, trigger_order_manually
+from services.condition_monitor import trigger_order_manually
 from routers import (
     auth_router,
     market_router,
@@ -18,6 +18,7 @@ from routers import (
     copilot_router,
     optimization_router,
     news_router,
+    cron_router,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -30,16 +31,9 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Initializing database...")
     init_db()
-    logger.info("Starting Condition Monitor background task...")
-    monitor_task = asyncio.create_task(run_condition_monitor())
-    logger.info("NovaTrade backend ready!")
+    logger.info("NovaTrade backend ready (Serverless Mode)!")
     yield
     # Shutdown
-    monitor_task.cancel()
-    try:
-        await monitor_task
-    except asyncio.CancelledError:
-        pass
     logger.info("NovaTrade backend shut down.")
 
 
@@ -79,6 +73,7 @@ app.include_router(orders_router.router)
 app.include_router(copilot_router.router)
 app.include_router(optimization_router.router)
 app.include_router(news_router.router)
+app.include_router(cron_router.router)
 
 
 # Debug endpoint — force-trigger a pending order (for demo)
