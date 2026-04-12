@@ -2,7 +2,8 @@
 
 import sys
 import os
-from datetime import datetime, timedelta
+import json
+from datetime import datetime, timedelta, timezone
 
 # Add parent dir to path so imports work
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -77,7 +78,7 @@ def seed():
                 quantity=qty,
                 price=price,
                 total=round(qty * price, 2),
-                timestamp=datetime.utcnow() - timedelta(days=days_ago),
+                timestamp=datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days_ago),
             )
             db.add(t)
         print(f"Added {len(transactions)} transactions")
@@ -95,9 +96,7 @@ def seed():
             symbol="AAPL",
             action="buy",
             quantity=25,
-            indicator="rsi",
-            condition="below",
-            value=35,
+            conditions=json.dumps([{"indicator": "rsi", "condition": "below", "value": 35}]),
             order_type="conditional",
             status="pending",
         )
