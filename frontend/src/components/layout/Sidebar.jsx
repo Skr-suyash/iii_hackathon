@@ -9,6 +9,7 @@ import {
   LogOut,
   Zap,
   Sparkles,
+  Newspaper,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
@@ -21,6 +22,7 @@ const navItems = [
   { icon: Briefcase, label: "Holdings", path: "/holdings" },
   { icon: Eye, label: "Watchlist", path: "/watchlist" },
   { icon: History, label: "History", path: "/history" },
+  { icon: Newspaper, label: "News", path: "/news" },
 ];
 
 function SidebarIcon({ children, tooltip, onClick, active, asChild }) {

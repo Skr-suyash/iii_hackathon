@@ -17,6 +17,7 @@ from routers import (
     orders_router,
     copilot_router,
     optimization_router,
+    news_router,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -66,6 +67,7 @@ app.include_router(watchlist_router.router)
 app.include_router(orders_router.router)
 app.include_router(copilot_router.router)
 app.include_router(optimization_router.router)
+app.include_router(news_router.router)
 
 
 # Debug endpoint — force-trigger a pending order (for demo)
