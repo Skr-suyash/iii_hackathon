@@ -3,6 +3,7 @@
 import asyncio
 import logging
 from datetime import datetime
+import json
 
 from sqlalchemy.orm import Session
 from database import SessionLocal
@@ -37,9 +38,8 @@ async def _check_all_orders():
             triggered = _evaluate_order(order)
             if triggered:
                 logger.info(
-                    "Order #%d TRIGGERED: %s %d %s (indicator=%s %s %s)",
+                    "Order #%d TRIGGERED: %s %d %s (evaluating multi-conditions)",
                     order.id, order.action, order.quantity, order.symbol,
-                    order.indicator, order.condition, order.value,
                 )
                 user = db.query(User).filter(User.id == order.user_id).first()
                 if user:
@@ -59,30 +59,44 @@ async def _check_all_orders():
 
 
 def _evaluate_order(order: PendingOrder) -> bool:
-    """Check if an order's condition is met."""
-    current = get_indicator_value(order.symbol, order.indicator)
-    if current is None:
+    """Check if an order's chained conditions are ALL met (AND logic)."""
+    try:
+        conditions = json.loads(order.conditions)
+    except Exception:
         return False
+        
+    if not conditions:
+        return False
+        
+    for cond in conditions:
+        indicator = cond.get("indicator")
+        operator = cond.get("condition")
+        value = cond.get("value")
 
-    # For crossover detection, we need the previous value
-    key = f"{order.symbol}:{order.indicator}"
-    prev = _previous_values.get(key)
-    _previous_values[key] = {"value": current}
-
-    if order.condition == "above":
-        return current > order.value
-    elif order.condition == "below":
-        return current < order.value
-    elif order.condition == "crosses_above":
-        if prev is None:
+        current = get_indicator_value(order.symbol, indicator)
+        if current is None:
             return False
-        return prev["value"] <= order.value and current > order.value
-    elif order.condition == "crosses_below":
-        if prev is None:
-            return False
-        return prev["value"] >= order.value and current < order.value
 
-    return False
+        # For crossover detection, we need the previous value
+        key = f"{order.symbol}:{indicator}"
+        prev = _previous_values.get(key)
+        _previous_values[key] = {"value": current}
+
+        if operator == "above":
+            if not (current > value): return False
+        elif operator == "below":
+            if not (current < value): return False
+        elif operator == "crosses_above":
+            if prev is None: return False
+            if not (prev["value"] <= value and current > value): return False
+        elif operator == "crosses_below":
+            if prev is None: return False
+            if not (prev["value"] >= value and current < value): return False
+        else:
+            return False
+
+    # True only if ALL conditions pass
+    return True
 
 
 async def trigger_order_manually(order_id: int) -> dict:

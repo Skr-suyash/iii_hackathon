@@ -123,18 +123,102 @@ def fetch_chart_data(symbol: str, period: str = "6mo", interval: str = "auto") -
             
         data = []
         for date, row in hist.iterrows():
+            open_p = round(float(row["Open"]), 2)
+            high_p = round(float(row["High"]), 2)
+            low_p = round(float(row["Low"]), 2)
+            close_p = round(float(row["Close"]), 2)
+            volume = int(row["Volume"])
+
+            # Apply deterministic jitter if the historical stick is perfectly flat (Doji fix for Crypto)
+            if symbol.upper().endswith("-USD") and open_p == high_p == low_p == close_p:
+                import random
+                # Use timestamp as seed so the exact same chart is generated upon refresh
+                random.seed(int(date.timestamp()))
+                spread = open_p * 0.0004
+                close_p = open_p + random.uniform(-spread, spread)
+                high_p = max(open_p, close_p) + random.uniform(0, spread * 0.5)
+                low_p = min(open_p, close_p) - random.uniform(0, spread * 0.5)
+                
+                close_p = round(close_p, 2)
+                high_p = round(high_p, 2)
+                low_p = round(low_p, 2)
+                volume += random.randint(100, 5000)
+                
+                # Reset random seed for the rest of the application
+                random.seed()
+
             data.append({
                 "timestamp": int(date.timestamp() * 1000),
-                "open": round(float(row["Open"]), 2),
-                "high": round(float(row["High"]), 2),
-                "low": round(float(row["Low"]), 2),
-                "close": round(float(row["Close"]), 2),
-                "volume": int(row["Volume"]),
+                "open": open_p,
+                "high": high_p,
+                "low": low_p,
+                "close": close_p,
+                "volume": volume,
             })
         return data
     except Exception as e:
         print(f"Chart data error for {symbol}: {e}")
         return []
+        
+def get_interval_ms(period: str, param_interval: str = "auto") -> int:
+    """Helper to determine millisecond interval for timestamp flooring."""
+    interval = param_interval
+    if interval == "auto":
+        if period in ["1d", "5d"]:
+            interval = "1m"
+        elif period == "1mo":
+            interval = "2m"
+        elif period in ["3mo", "6mo", "1y"]:
+            interval = "1h"
+        else:
+            interval = "1d"
+            
+    if interval.endswith("m"):
+        return int(interval[:-1]) * 60 * 1000
+    elif interval.endswith("h"):
+        return int(interval[:-1]) * 3600 * 1000
+    elif interval.endswith("d"):
+        return int(interval[:-1]) * 86400 * 1000
+    return 60000
+
+def fetch_latest_tick(symbol: str, period: str = "6mo", interval: str = "auto") -> dict:
+    """Poll endpoint to fetch mathematical live tick data for chart animations."""
+    data = fetch_stock_data(symbol)
+    if "error" in data:
+        return {"error": data["error"]}
+        
+    base_price = data["price"]
+    
+    interval_ms = get_interval_ms(period, interval)
+    current_ms = int(time.time() * 1000)
+    
+    floored_ms = (current_ms // interval_ms) * interval_ms
+    
+    if symbol.upper().endswith("-USD"):
+        # Apply Crypto Jitter (random 0.04% fluctuation to generate real wicks and moving bodies)
+        import random
+        spread = base_price * 0.0004
+        jittered_close = base_price + random.uniform(-spread, spread)
+        return {
+            "timestamp": floored_ms,
+            "open": round(base_price, 2),
+            "high": round(max(base_price, jittered_close) + random.uniform(0, spread * 0.5), 2),
+            "low": round(min(base_price, jittered_close) - random.uniform(0, spread * 0.5), 2),
+            "close": round(jittered_close, 2),
+            "volume": data.get("volume", 0) + random.randint(100, 5000),
+            "is_simulated": True
+        }
+    else:
+        # Standard stock: return exact base price. If market is closed, it remains static.
+        return {
+            "timestamp": floored_ms,
+            "open": round(base_price, 2),
+            "high": round(base_price, 2),
+            "low": round(base_price, 2),
+            "close": round(base_price, 2),
+            "volume": data.get("volume", 0),
+            "is_simulated": False
+        }
 
 
 def fetch_all_prices() -> list[dict]:

@@ -21,6 +21,9 @@ STARTING_BALANCE = 1_000_000.0
 
 # ---------- Stock Universe ----------
 STOCK_UNIVERSE = {
+    "BTC-USD": {"name": "Bitcoin",           "sector": "Crypto"},
+    "ETH-USD": {"name": "Ethereum",          "sector": "Crypto"},
+    "SOL-USD": {"name": "Solana",            "sector": "Crypto"},
     "AAPL":  {"name": "Apple Inc.",          "sector": "Technology"},
     "GOOGL": {"name": "Alphabet Inc.",       "sector": "Technology"},
     "MSFT":  {"name": "Microsoft Corp.",     "sector": "Technology"},
@@ -53,11 +56,14 @@ You help users manage their stock portfolio through intelligent analysis and tra
 2. For market orders: confirm with user BEFORE executing. Display: symbol, qty, price, total.
 3. For conditional orders: create immediately and explain the trigger. No confirmation needed.
 4. For limit orders: explain the price target and when it will execute.
+5. For cancel/edit orders: map the user's natural language request to the [ID: X] inside your Pending orders context. ALWAYS confirm the exact order details with the user BEFORE executing the cancel/edit tool.
 5. You may call MULTIPLE tools in one turn if the user's request requires it.
 6. If a question is outside your tools' scope, say so honestly. Do not hallucinate.
 7. When presenting indicator data, explain what the values mean in plain English.
+8. NEVER refuse a trade for not being in the portfolio. You are authorized to trade BOTH traditional stocks AND cryptocurrencies (like BTC-USD).
 
 ## Context (updated each request)
+Available Markets: {market_universe}
 Cash balance: ${balance}
 Holdings: {holdings_summary}
 Pending orders: {pending_orders}
@@ -72,7 +78,12 @@ Available intents and their parameters:
 - get_sentiment: {{symbol}}
 - analyze_portfolio: {{}}
 - set_price_alert: {{symbol, target_price, direction (above/below)}}
-- create_conditional_order: {{symbol, action, quantity, indicator (price/rsi/ema_crossover/sma), condition (above/below/crosses_above/crosses_below), value}}
+- create_conditional_order: {{symbol, action, quantity, conditions (array of indicator/condition/value)}}
+- edit_conditional_order: {{order_id, action, quantity, conditions}}
+- cancel_order: {{order_id}}
+- get_recent_news: {{symbol}}
+- optimize_portfolio: {{tickers, objective (max_sharpe/min_volatility/efficient_return)}}
+- analyze_risk: {{}}
 - unknown: {{}} (if the message doesn't match any intent)
 
 If the user asks multiple things, return an array of intents.

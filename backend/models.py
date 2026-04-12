@@ -55,9 +55,7 @@ class PendingOrder(Base):
     symbol = Column(String, nullable=False)
     action = Column(String, nullable=False)         # "buy" or "sell"
     quantity = Column(Float, nullable=False)
-    indicator = Column(String, nullable=False)       # "price", "rsi", "sma", "ema_crossover"
-    condition = Column(String, nullable=False)       # "above", "below", "crosses_above", "crosses_below"
-    value = Column(Float, nullable=False)
+    conditions = Column(String, nullable=False)      # JSON encoded list: [{"indicator", "condition", "value"}]
     order_type = Column(String, default="conditional")  # "conditional" or "limit"
     status = Column(String, default="pending")       # "pending", "filled", "cancelled"
     created_at = Column(DateTime, default=datetime.utcnow)

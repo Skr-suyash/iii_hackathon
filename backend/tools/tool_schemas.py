@@ -102,13 +102,79 @@ TOOLS = [
                     "symbol": {"type": "string", "description": "Stock ticker symbol"},
                     "action": {"type": "string", "enum": ["buy", "sell"]},
                     "quantity": {"type": "integer", "description": "Number of shares"},
-                    "indicator": {"type": "string", "enum": ["price", "rsi", "ema_crossover", "sma"], "description": "Which indicator to monitor"},
-                    "condition": {"type": "string", "enum": ["above", "below", "crosses_above", "crosses_below"], "description": "Trigger condition"},
-                    "value": {"type": "number", "description": "Threshold: price in $, RSI 0-100, or SMA/EMA period"},
+                    "conditions": {
+                        "type": "array",
+                        "description": "Array of chained conditions. All must be met.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "indicator": {"type": "string", "enum": ["price", "rsi", "ema_crossover", "sma"]},
+                                "condition": {"type": "string", "enum": ["above", "below", "crosses_above", "crosses_below"]},
+                                "value": {"type": "number"}
+                            },
+                            "required": ["indicator", "condition", "value"]
+                        }
+                    },
                 },
-                "required": ["symbol", "action", "quantity", "indicator", "condition", "value"],
+                "required": ["symbol", "action", "quantity", "conditions"],
             },
         },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "edit_conditional_order",
+            "description": "Edit an existing conditional order. You can change the quantity or fully replace the chained conditions. Do NOT use this to edit limits or market orders. Use this when the user says 'change my AAPL condition' or 'edit order 4'.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "order_id": {"type": "integer", "description": "The specific order ID to edit."},
+                    "action": {"type": "string", "enum": ["buy", "sell"]},
+                    "quantity": {"type": "integer"},
+                    "conditions": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "indicator": {"type": "string", "enum": ["price", "rsi", "ema_crossover", "sma"]},
+                                "condition": {"type": "string", "enum": ["above", "below", "crosses_above", "crosses_below"]},
+                                "value": {"type": "number"}
+                            },
+                            "required": ["indicator", "condition", "value"]
+                        }
+                    },
+                },
+                "required": ["order_id", "action", "quantity", "conditions"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "cancel_order",
+            "description": "Cancel or delete a pending limit or conditional order by its ID. Use when user says 'cancel order 5' or 'delete my AAPL pending buy'.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "order_id": {"type": "integer", "description": "The specific order ID to cancel."}
+                },
+                "required": ["order_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_recent_news",
+            "description": "Fetch the actual real-time news headlines, publishers, and links for a given stock symbol or the global market (use SPY or QQQ for global). Use this when the user specifically asks for news or wants context around a price movement.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "symbol": {"type": "string", "description": "Stock symbol (e.g. AAPL) or global index (e.g. SPY, QQQ)."}
+                },
+                "required": ["symbol"]
+            }
+        }
     },
     {
         "type": "function",

@@ -70,7 +70,9 @@ export default function PendingOrders({ refreshTrigger }) {
                   </Badge>
                 </TableCell>
                 <TableCell className="text-xs text-muted-foreground">
-                  {o.indicator} {o.condition.replace(/_/g, " ")} {o.value}
+                  {o.conditions && o.conditions.length > 0 
+                    ? o.conditions.map(c => `${c.indicator} ${c.condition.replace(/_/g, " ")} ${c.value}`).join(" AND ")
+                    : "No condition"}
                 </TableCell>
                 <TableCell>
                   <Badge

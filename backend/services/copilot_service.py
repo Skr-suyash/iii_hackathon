@@ -215,12 +215,23 @@ def _build_system_prompt(db: Session, user: User) -> str:
         for h in holdings
     ) or "None"
 
+    def format_conditions(cond_json):
+        try:
+            conds = json.loads(cond_json)
+            if not conds: return "no conditions"
+            return " AND ".join(f"{c['indicator']} {c['condition']} {c['value']}" for c in conds)
+        except Exception:
+            return "invalid conditions"
+
     pending_summary = ", ".join(
-        f"{o.action.upper()} {int(o.quantity)} {o.symbol} when {o.indicator} {o.condition} {o.value}"
+        f"[ID: {o.id}] {o.action.upper()} {int(o.quantity)} {o.symbol} when {format_conditions(o.conditions)}"
         for o in orders
     ) or "None"
 
-    prompt = SYSTEM_PROMPT.replace("{balance}", f"{user.balance:,.2f}")
+    market_universe = ", ".join(STOCK_UNIVERSE.keys())
+
+    prompt = SYSTEM_PROMPT.replace("{market_universe}", market_universe)
+    prompt = prompt.replace("{balance}", f"{user.balance:,.2f}")
     prompt = prompt.replace("{holdings_summary}", holdings_summary)
     prompt = prompt.replace("{pending_orders}", pending_summary)
     prompt = prompt.replace("{alerts}", "None")  # simplified for hackathon

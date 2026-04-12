@@ -12,13 +12,13 @@ from config import STOCK_UNIVERSE
 router = APIRouter(prefix="/api/orders", tags=["orders"])
 
 
+from typing import Any
+
 class OrderCreate(BaseModel):
     symbol: str
     action: str
     quantity: int
-    indicator: str
-    condition: str
-    value: float
+    conditions: list[dict[str, Any]]  # Changed to accept array of condition dictionaries
 
 
 @router.get("")
@@ -32,6 +32,7 @@ def get_orders(
         .order_by(PendingOrder.created_at.desc())
         .all()
     )
+    import json
     return {
         "orders": [
             {
@@ -39,9 +40,7 @@ def get_orders(
                 "symbol": o.symbol,
                 "action": o.action,
                 "quantity": o.quantity,
-                "indicator": o.indicator,
-                "condition": o.condition,
-                "value": o.value,
+                "conditions": json.loads(o.conditions) if o.conditions else [],
                 "order_type": o.order_type,
                 "status": o.status,
                 "created_at": o.created_at.isoformat(),
@@ -63,14 +62,13 @@ def create_order(
     if symbol not in STOCK_UNIVERSE:
         raise HTTPException(status_code=400, detail=f"Unknown symbol: {symbol}")
 
+    import json
     order = PendingOrder(
         user_id=user.id,
         symbol=symbol,
         action=req.action.lower(),
         quantity=req.quantity,
-        indicator=req.indicator,
-        condition=req.condition,
-        value=req.value,
+        conditions=json.dumps(req.conditions),
         order_type="conditional",
         status="pending",
     )
@@ -81,7 +79,7 @@ def create_order(
     return {
         "success": True,
         "order_id": order.id,
-        "message": f"Conditional order created: {req.action.upper()} {req.quantity} {symbol} when {req.indicator} {req.condition} {req.value}",
+        "message": f"Conditional order created: {req.action.upper()} {req.quantity} {symbol} monitoring {len(req.conditions)} condition(s).",
     }
 
 

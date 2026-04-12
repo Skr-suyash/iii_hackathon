@@ -44,5 +44,17 @@ async def execute_tool(db: Session, user: User, tool_name: str, args: dict) -> d
         from tools.analyze_risk import run
         return await asyncio.to_thread(run, db, user)
 
+    elif tool_name == "edit_conditional_order":
+        from tools.edit_conditional_order import run
+        return await asyncio.to_thread(run, db, user, **args)
+
+    elif tool_name == "cancel_order":
+        from tools.cancel_order import run
+        return await asyncio.to_thread(run, db, user, **args)
+
+    elif tool_name == "get_recent_news":
+        from tools.get_recent_news import run
+        return await run(**args)
+
     else:
         return {"error": f"Unknown tool: {tool_name}"}
