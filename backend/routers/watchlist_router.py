@@ -40,6 +40,12 @@ async def get_watchlist(
             sentiment_val = cached["data"].get("sentiment", "neutral")
         else:
             sentiment_val = "loading"
+            # Pre-mark the cache to prevent the frontend polling from spawning
+            # duplicate LLM background tasks while we wait for the first one to finish.
+            _sentiment_cache[item.symbol] = {
+                "data": {"sentiment": "loading"},
+                "timestamp": now
+            }
             background_tasks.add_task(run_sentiment_bg, item.symbol)
 
         result.append({

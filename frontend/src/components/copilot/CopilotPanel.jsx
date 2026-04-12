@@ -37,16 +37,60 @@ export default function CopilotPanel() {
 
     try {
       const conversation = messages.slice(-10).map(({ role, content }) => ({ role, content }));
-      const { data } = await client.post("/copilot/chat", {
-        message: msg,
-        conversation,
+      const token = localStorage.getItem("novatrade_token");
+
+      const response = await fetch("/api/copilot/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ message: msg, conversation })
       });
-      const assistantMsg = {
-        role: "assistant",
-        content: data.response,
-        tools: data.tool_calls_made || [],
-      };
-      setMessages((prev) => [...prev, assistantMsg]);
+
+      if (!response.ok) throw new Error("Network error");
+
+      // Add placeholder assistant message
+      setMessages((prev) => [...prev, { role: "assistant", content: "", tools: [] }]);
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let done = false;
+      let buffer = "";
+
+      while (!done) {
+        const { value, done: readerDone } = await reader.read();
+        done = readerDone;
+        if (value) {
+          buffer += decoder.decode(value, { stream: true });
+          let eolIndex;
+          while ((eolIndex = buffer.indexOf("\n\n")) >= 0) {
+            const chunk = buffer.slice(0, eolIndex).trim();
+            buffer = buffer.slice(eolIndex + 2);
+            if (chunk.startsWith("data: ")) {
+              try {
+                const data = JSON.parse(chunk.slice(6));
+                setMessages((prev) => {
+                  const newMessages = [...prev];
+                  const lastIndex = newMessages.length - 1;
+                  const lastMessage = { ...newMessages[lastIndex] };
+
+                  if (data.type === "chunk") {
+                    lastMessage.content += data.content;
+                  } else if (data.type === "tool_call") {
+                    lastMessage.tools = [...(lastMessage.tools || []), data];
+                  }
+                  
+                  newMessages[lastIndex] = lastMessage;
+                  return newMessages;
+                });
+              } catch (e) {
+                console.error("SSE parse error", e);
+              }
+            }
+          }
+        }
+      }
     } catch (err) {
       setMessages((prev) => [
         ...prev,
@@ -112,7 +156,7 @@ export default function CopilotPanel() {
           <ChatMessage key={i} {...msg} />
         ))}
 
-        {isLoading && (
+        {isLoading && (!messages.length || messages[messages.length - 1].role !== "assistant") && (
           <div className="flex justify-start">
             <div className="bg-copilot-bubble rounded-lg rounded-bl-sm px-4 py-3 max-w-[85%]">
               <div className="flex gap-1">

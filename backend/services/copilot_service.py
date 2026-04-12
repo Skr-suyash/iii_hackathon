@@ -17,13 +17,13 @@ from tools.tool_executor import execute_tool
 logger = logging.getLogger("novatrade.copilot")
 
 
-async def chat(
+async def chat_stream(
     db: Session,
     user: User,
     message: str,
     conversation: list[dict],
-) -> dict:
-    """Process a copilot chat message. Returns response + tool calls made."""
+):
+    """Process a copilot chat message and stream the response."""
 
     # Build dynamic system prompt with user context
     system_prompt = _build_system_prompt(db, user)
@@ -47,19 +47,20 @@ async def chat(
             result = await _call_ollama(messages)
         except Exception as e:
             logger.error("Ollama call failed: %s", e)
-            # Try fallback intent parsing
-            return await _fallback_response(db, user, message, tool_calls_made)
+            # Try fallback intent parsing natively
+            fallback_res = await _fallback_response(db, user, message, tool_calls_made)
+            for tc in fallback_res.get("tool_calls_made", []):
+                yield f"data: {json.dumps({'type': 'tool_call', 'tool': tc['tool'], 'args': tc['args']})}\n\n"
+            yield f"data: {json.dumps({'type': 'chunk', 'content': fallback_res['response']})}\n\n"
+            return
 
         msg = result.get("message", {})
-
-        # Check for tool calls
         tool_calls = msg.get("tool_calls", [])
+
         if not tool_calls:
             # No tool calls — return the text response
-            return {
-                "response": msg.get("content", "I'm not sure how to help with that."),
-                "tool_calls_made": tool_calls_made,
-            }
+            yield f"data: {json.dumps({'type': 'chunk', 'content': msg.get('content', 'I am not sure how to help with that.')})}\n\n"
+            return
 
         # Execute each tool call
         for tc in tool_calls:
@@ -68,6 +69,8 @@ async def chat(
             tool_args = func.get("arguments", {})
 
             logger.info("Tool call: %s(%s)", tool_name, json.dumps(tool_args))
+
+            yield f"data: {json.dumps({'type': 'tool_call', 'tool': tool_name, 'args': tool_args})}\n\n"
 
             tool_result = await execute_tool(db, user, tool_name, tool_args)
 
@@ -91,16 +94,11 @@ async def chat(
     })
 
     try:
-        final_result = await _call_ollama(messages, include_tools=False)
-        return {
-            "response": final_result.get("message", {}).get("content", "I've gathered some data. Here's what I found so far..."),
-            "tool_calls_made": tool_calls_made,
-        }
-    except Exception:
-        return {
-            "response": "I've gathered some data but had trouble formatting the response. Please try again.",
-            "tool_calls_made": tool_calls_made,
-        }
+        async for chunk in _call_ollama_stream(messages, include_tools=False):
+            yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
+    except Exception as e:
+        logger.error("Ollama streaming failed: %s", e)
+        yield f"data: {json.dumps({'type': 'chunk', 'content': ' I had trouble formatting the response. Please try again.'})}\n\n"
 
 
 async def _call_ollama(messages: list[dict], include_tools: bool = True) -> dict:
@@ -109,6 +107,7 @@ async def _call_ollama(messages: list[dict], include_tools: bool = True) -> dict
         "model": OLLAMA_MODEL,
         "messages": messages,
         "stream": False,
+        "keep_alive": -1,
         "options": {
             "temperature": OLLAMA_TEMPERATURE,
             "num_ctx": OLLAMA_NUM_CTX,
@@ -121,6 +120,35 @@ async def _call_ollama(messages: list[dict], include_tools: bool = True) -> dict
         response = await client.post(OLLAMA_URL, json=payload)
         response.raise_for_status()
         return response.json()
+
+
+async def _call_ollama_stream(messages: list[dict], include_tools: bool = False):
+    """Call Ollama's /api/chat endpoint and yield SSE stream chunks."""
+    payload = {
+        "model": OLLAMA_MODEL,
+        "messages": messages,
+        "stream": True,
+        "keep_alive": -1,
+        "options": {
+            "temperature": OLLAMA_TEMPERATURE,
+            "num_ctx": OLLAMA_NUM_CTX,
+        },
+    }
+    if include_tools:
+        payload["tools"] = TOOLS
+
+    async with httpx.AsyncClient(timeout=OLLAMA_TIMEOUT) as client:
+        async with client.stream("POST", OLLAMA_URL, json=payload) as response:
+            response.raise_for_status()
+            async for line in response.aiter_lines():
+                if line:
+                    try:
+                        data = json.loads(line)
+                        chunk = data.get("message", {}).get("content", "")
+                        if chunk:
+                            yield chunk
+                    except json.JSONDecodeError:
+                        continue
 
 
 async def _fallback_response(
@@ -136,6 +164,7 @@ async def _fallback_response(
                     "model": OLLAMA_MODEL,
                     "messages": [{"role": "user", "content": prompt}],
                     "stream": False,
+                    "keep_alive": -1,
                     "options": {"temperature": 0, "num_ctx": 2048},
                 },
             )
